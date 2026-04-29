@@ -1,33 +1,11 @@
 from PySide6.QtCore import Signal, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton,
-    QGridLayout
+    QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QGraphicsDropShadowEffect
 )
 
-from .common import BasePage, HeaderBar, card_shadow
-
-
-class PainScoreButton(QPushButton):
-    def __init__(self, score: int, label: str):
-        super().__init__(f"{score}\n{label}")
-        self.score = score
-        self.setCursor(Qt.PointingHandCursor)
-        self.setMinimumSize(130, 120)
-        self.setStyleSheet("""
-            QPushButton {
-                background: white;
-                color: #10233c;
-                border: 1px solid #d7e2ef;
-                border-radius: 22px;
-                font-size: 22px;
-                font-weight: 800;
-                padding: 8px;
-            }
-            QPushButton:hover {
-                border: 2px solid #3b82f6;
-                background: #f7fbff;
-            }
-        """)
+from .common import BasePage, card_shadow, PRIMARY_DARK, CREAM
 
 
 class PainPage(BasePage):
@@ -36,60 +14,194 @@ class PainPage(BasePage):
 
     def __init__(self):
         super().__init__()
+        self.selected_score = None
+        self.buttons = []
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(36, 28, 36, 28)
+        root.setContentsMargins(0, 0, 0, 0)
 
-        page_card = QFrame()
-        page_card.setObjectName("PageCard")
-        card_shadow(page_card)
+        shell = self.build_shell()
+        shell_layout = QVBoxLayout(shell)
+        shell_layout.setContentsMargins(30, 30, 30, 30)
+        shell_layout.setSpacing(0)
 
-        layout = QVBoxLayout(page_card)
-        layout.setContentsMargins(34, 30, 34, 30)
-        layout.setSpacing(22)
+        top_row = QHBoxLayout()
+        self.back_button = self.build_back_button()
+        self.back_button.setStyleSheet(f"""
+            QPushButton {{
+                background: {PRIMARY_DARK};
+                color: {CREAM};
+                border: none;
+                border-radius: 14px;
+                font-family: Marcellus;
+                font-size: 20px;
+                font-weight: 900;
+                padding: 6px 16px;
+            }}
+            QPushButton:hover {{
+                background: #4a252b;
+            }}
+            QPushButton:pressed {{
+                background: #1f0e11;
+            }}
+        """)
+        self.back_button.clicked.connect(self.back_requested.emit)
 
-        self.header = HeaderBar(
-            title="Pain Score",
-            subtitle="Select the pain level that best matches the current condition."
-        )
-        self.header.back_button.clicked.connect(self.back_requested.emit)
+        top_row.addWidget(self.back_button, 0, Qt.AlignLeft)
+        top_row.addStretch(1)
+        shell_layout.addLayout(top_row)
 
-        self.context_label = QLabel("Selection: -")
-        self.context_label.setStyleSheet("""
-            QLabel {
-                background: #f6f9fd;
-                color: #27476b;
-                border: 1px solid #d5e1ef;
-                border-radius: 12px;
-                padding: 10px 14px;
-                font-size: 13px;
-                font-weight: 700;
-            }
+        center = QVBoxLayout()
+        center.setSpacing(36)
+        center.addStretch(1)
+
+        title = QLabel("How bad is the pain?")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet(f"""
+            QLabel {{
+                font-family: Marcellus;
+                font-size: 64px;
+                font-weight: 900;
+                color: {PRIMARY_DARK};
+                background: transparent;
+            }}
         """)
 
-        grid = QGridLayout()
-        grid.setSpacing(16)
+        title_shadow = QGraphicsDropShadowEffect(title)
+        title_shadow.setBlurRadius(45)
+        title_shadow.setOffset(0, 6)
+        title_shadow.setColor(QColor(0, 0, 0, 120))
+        title.setGraphicsEffect(title_shadow)
 
-        labels = {
-            1: "Very Low", 2: "Low", 3: "Mild", 4: "Noticeable", 5: "Moderate",
-            6: "Strong", 7: "High", 8: "Very High", 9: "Severe", 10: "Extreme"
-        }
+        card = QFrame()
+        card.setObjectName("ContentCard")
+        card.setFixedWidth(860)
+        card_shadow(card, blur=28, y=9)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(40, 34, 40, 34)
+        card_layout.setSpacing(26)
+
+        score_row = QHBoxLayout()
+        score_row.setSpacing(14)
+        score_row.addStretch(1)
 
         for i in range(1, 11):
-            btn = PainScoreButton(i, labels[i])
-            btn.clicked.connect(lambda checked=False, score=i: self.pain_selected.emit(score))
-            grid.addWidget(btn, (i - 1) // 5, (i - 1) % 5)
+            btn = QPushButton(str(i))
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFixedSize(60, 60)
+            btn.setStyleSheet(self.default_score_style())
+            btn.clicked.connect(lambda checked=False, score=i: self.select_score(score))
+            self.buttons.append(btn)
+            score_row.addWidget(btn)
 
-        layout.addWidget(self.header)
-        layout.addWidget(self.context_label)
-        layout.addLayout(grid, 1)
+        score_row.addStretch(1)
 
-        root.addWidget(page_card)
+        emoji_row = QHBoxLayout()
+        emoji_row.addStretch(1)
 
-    def set_context(self, body_part: str, disease: str):
-        self.context_label.setText(
-            f"Selection: {body_part.title()}  •  {disease}"
-        )
+        low = QLabel("😕")
+        mid = QLabel("😣")
+        high = QLabel("😫")
+
+        for lbl in (low, mid, high):
+            lbl.setStyleSheet("font-size: 54px; background: transparent;")
+            lbl.setAlignment(Qt.AlignCenter)
+
+        emoji_row.addWidget(low)
+        emoji_row.addStretch(1)
+        emoji_row.addWidget(mid)
+        emoji_row.addStretch(1)
+        emoji_row.addWidget(high)
+        emoji_row.addStretch(1)
+
+        next_btn = QPushButton("Next")
+        next_btn.setCursor(Qt.PointingHandCursor)
+        next_btn.setFixedSize(240, 68)
+        next_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {PRIMARY_DARK};
+                color: {CREAM};
+                border: none;
+                border-radius: 16px;
+                font-family: Marcellus;
+                font-size: 22px;
+                font-weight: 900;
+            }}
+            QPushButton:hover {{
+                background: #4a252b;
+            }}
+            QPushButton:pressed {{
+                background: #1f0e11;
+            }}
+        """)
+        card_shadow(next_btn, blur=22, y=7)
+        next_btn.clicked.connect(self.submit)
+
+        next_row = QHBoxLayout()
+        next_row.addStretch(1)
+        next_row.addWidget(next_btn)
+        next_row.addStretch(1)
+
+        card_layout.addLayout(score_row)
+        card_layout.addLayout(emoji_row)
+        card_layout.addLayout(next_row)
+
+        card_row = QHBoxLayout()
+        card_row.addStretch(1)
+        card_row.addWidget(card)
+        card_row.addStretch(1)
+
+        center.addWidget(title)
+        center.addLayout(card_row)
+        center.addStretch(2)
+
+        shell_layout.addLayout(center, 1)
+        root.addWidget(shell)
+
+    def default_score_style(self):
+        return f"""
+            QPushButton {{
+                background: {PRIMARY_DARK};
+                color: {CREAM};
+                border: none;
+                border-radius: 14px;
+                font-family: Marcellus;
+                font-size: 24px;
+                font-weight: 900;
+            }}
+            QPushButton:hover {{
+                background: #4a252b;
+            }}
+        """
+
+    def selected_score_style(self):
+        return """
+            QPushButton {
+                background: #ddb231;
+                color: #30161a;
+                border: none;
+                border-radius: 14px;
+                font-family: Marcellus;
+                font-size: 24px;
+                font-weight: 900;
+            }
+        """
+
+    def select_score(self, score: int):
+        self.selected_score = score
+
+        for index, btn in enumerate(self.buttons, start=1):
+            if index == score:
+                btn.setStyleSheet(self.selected_score_style())
+            else:
+                btn.setStyleSheet(self.default_score_style())
+
+    def submit(self):
+        if self.selected_score is not None:
+            self.pain_selected.emit(self.selected_score)
 
     def reset(self):
-        self.context_label.setText("Selection: -")
+        self.selected_score = None
+        for btn in self.buttons:
+            btn.setStyleSheet(self.default_score_style())

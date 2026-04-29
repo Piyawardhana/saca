@@ -3,10 +3,17 @@ import os
 from PySide6.QtWidgets import QMainWindow, QStackedWidget, QMessageBox
 
 from api_client import APIClient
-from .pages.gender_page import GenderPage
-from .pages.input_page import InputPage
+
+from .pages.welcome_page import WelcomePage
+from .pages.language_page import LanguagePage
+from .pages.input_method_page import InputMethodPage
+from .pages.description_page import DescriptionPage
+from .pages.voice_page import VoicePage
+from .pages.body_part_page import BodyPartPage
 from .pages.disease_page import DiseasePage
+from .pages.duration_page import DurationPage
 from .pages.pain_page import PainPage
+from .pages.medication_page import MedicationPage
 from .pages.result_page import ResultPage
 
 
@@ -14,7 +21,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Medical Triage Assistant")
-        self.resize(1320, 860)
+        self.resize(1360, 860)
         self.setMinimumSize(1180, 760)
 
         self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,135 +29,231 @@ class MainWindow(QMainWindow):
 
         self.client = APIClient()
 
-        self.selected_gender = None
+        self.selected_language = None
+        self.selected_input_method = None
         self.selected_body_part = None
         self.selected_disease = None
-        self.selected_pain_score = None
         self.entered_text = ""
+        self.voice_text = ""
+        self.selected_duration = None
+        self.selected_pain_score = None
+        self.takes_medication = None
 
         self.setStyleSheet("""
             QMainWindow {
-                background: #eef4fb;
+                background: #eef5fb;
             }
         """)
 
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
 
-        self.gender_page = GenderPage(self.assets_dir)
-        self.input_page = InputPage(self.assets_dir)
+        self.welcome_page = WelcomePage()
+        self.language_page = LanguagePage()
+        self.input_method_page = InputMethodPage()
+        self.description_page = DescriptionPage()
+        self.voice_page = VoicePage()
+        self.body_part_page = BodyPartPage(self.assets_dir)
         self.disease_page = DiseasePage(self.assets_dir)
+        self.duration_page = DurationPage()
         self.pain_page = PainPage()
+        self.medication_page = MedicationPage()
         self.result_page = ResultPage()
 
-        self.stack.addWidget(self.gender_page)
-        self.stack.addWidget(self.input_page)
-        self.stack.addWidget(self.disease_page)
-        self.stack.addWidget(self.pain_page)
-        self.stack.addWidget(self.result_page)
+        for page in [
+            self.welcome_page,
+            self.language_page,
+            self.input_method_page,
+            self.description_page,
+            self.voice_page,
+            self.body_part_page,
+            self.disease_page,
+            self.duration_page,
+            self.pain_page,
+            self.medication_page,
+            self.result_page,
+        ]:
+            self.stack.addWidget(page)
 
-        self.gender_page.gender_selected.connect(self.on_gender_selected)
+        self.connect_signals()
+        self.stack.setCurrentWidget(self.welcome_page)
 
-        self.input_page.back_requested.connect(self.go_to_gender_page)
-        self.input_page.text_submitted.connect(self.on_text_submitted)
-        self.input_page.body_part_selected.connect(self.on_body_part_selected)
+    def connect_signals(self):
+        self.welcome_page.next_requested.connect(
+            lambda: self.stack.setCurrentWidget(self.language_page)
+        )
 
-        self.disease_page.back_requested.connect(self.go_to_input_page)
+        self.language_page.back_requested.connect(
+            lambda: self.stack.setCurrentWidget(self.welcome_page)
+        )
+        self.language_page.language_selected.connect(self.on_language_selected)
+
+        self.input_method_page.back_requested.connect(
+            lambda: self.stack.setCurrentWidget(self.language_page)
+        )
+        self.input_method_page.method_selected.connect(self.on_input_method_selected)
+
+        self.description_page.back_requested.connect(
+            lambda: self.stack.setCurrentWidget(self.input_method_page)
+        )
+        self.description_page.next_requested.connect(self.on_description_submitted)
+
+        self.voice_page.back_requested.connect(
+            lambda: self.stack.setCurrentWidget(self.input_method_page)
+        )
+        self.voice_page.next_requested.connect(self.on_voice_submitted)
+
+        self.body_part_page.back_requested.connect(
+            lambda: self.stack.setCurrentWidget(self.input_method_page)
+        )
+        self.body_part_page.body_part_selected.connect(self.on_body_part_selected)
+
+        self.disease_page.back_requested.connect(
+            lambda: self.stack.setCurrentWidget(self.body_part_page)
+        )
         self.disease_page.disease_selected.connect(self.on_disease_selected)
 
-        self.pain_page.back_requested.connect(self.go_to_disease_page)
+        self.duration_page.back_requested.connect(self.go_back_to_previous_input_page)
+        self.duration_page.duration_selected.connect(self.on_duration_selected)
+
+        self.pain_page.back_requested.connect(
+            lambda: self.stack.setCurrentWidget(self.duration_page)
+        )
         self.pain_page.pain_selected.connect(self.on_pain_selected)
 
-        self.result_page.back_requested.connect(self.go_back_from_result)
-        self.result_page.new_assessment_requested.connect(self.restart_assessment)
+        self.medication_page.back_requested.connect(
+            lambda: self.stack.setCurrentWidget(self.pain_page)
+        )
+        self.medication_page.medication_selected.connect(self.on_medication_selected)
 
-        self.stack.setCurrentWidget(self.gender_page)
+        self.result_page.back_requested.connect(
+            lambda: self.stack.setCurrentWidget(self.medication_page)
+        )
+        self.result_page.home_requested.connect(self.go_home)
 
-    def on_gender_selected(self, gender: str):
-        self.selected_gender = gender
-        self.input_page.set_selected_gender(gender)
-        self.stack.setCurrentWidget(self.input_page)
+    def on_language_selected(self, language: str):
+        self.selected_language = language
+        self.stack.setCurrentWidget(self.input_method_page)
 
-    def go_to_gender_page(self):
-        self.stack.setCurrentWidget(self.gender_page)
+    def on_input_method_selected(self, method: str):
+        self.selected_input_method = method
 
-    def go_to_input_page(self):
-        self.stack.setCurrentWidget(self.input_page)
+        if method == "text":
+            self.stack.setCurrentWidget(self.description_page)
+        elif method == "voice":
+            self.stack.setCurrentWidget(self.voice_page)
+        elif method == "image":
+            self.stack.setCurrentWidget(self.body_part_page)
 
-    def go_to_disease_page(self):
-        self.stack.setCurrentWidget(self.disease_page)
-
-    def on_text_submitted(self, text: str):
+    def on_description_submitted(self, text: str):
         self.entered_text = text.strip()
         if not self.entered_text:
-            QMessageBox.warning(self, "Missing Input", "Please enter symptoms or use the microphone.")
+            QMessageBox.warning(self, "Missing Input", "Please enter a description.")
             return
-        self.run_text_analysis()
+        self.stack.setCurrentWidget(self.duration_page)
+
+    def on_voice_submitted(self, text: str):
+        self.voice_text = text.strip()
+        if not self.voice_text:
+            QMessageBox.warning(self, "Missing Input", "Please record symptoms first.")
+            return
+        self.stack.setCurrentWidget(self.duration_page)
 
     def on_body_part_selected(self, body_part: str):
         self.selected_body_part = body_part
         self.disease_page.load_diseases(body_part)
         self.stack.setCurrentWidget(self.disease_page)
 
-    def on_disease_selected(self, disease_name: str):
-        self.selected_disease = disease_name
-        self.pain_page.set_context(self.selected_body_part, self.selected_disease)
+    def on_disease_selected(self, disease: str):
+        self.selected_disease = disease
+        self.stack.setCurrentWidget(self.duration_page)
+
+    def go_back_to_previous_input_page(self):
+        if self.selected_input_method == "text":
+            self.stack.setCurrentWidget(self.description_page)
+        elif self.selected_input_method == "voice":
+            self.stack.setCurrentWidget(self.voice_page)
+        elif self.selected_input_method == "image":
+            self.stack.setCurrentWidget(self.disease_page)
+
+    def on_duration_selected(self, duration: str):
+        self.selected_duration = duration
         self.stack.setCurrentWidget(self.pain_page)
 
     def on_pain_selected(self, pain_score: int):
         self.selected_pain_score = pain_score
-        self.run_image_analysis()
+        self.stack.setCurrentWidget(self.medication_page)
 
-    def run_text_analysis(self):
+    def on_medication_selected(self, takes_medication: str):
+        self.takes_medication = takes_medication
+        self.run_analysis()
+
+    def build_text_for_prediction(self) -> str:
+        if self.selected_input_method == "text":
+            return self.entered_text
+
+        if self.selected_input_method == "voice":
+            return self.voice_text
+
+        if self.selected_input_method == "image":
+            parts = []
+            if self.selected_disease:
+                parts.append(self.selected_disease)
+            if self.selected_duration:
+                parts.append(f"Duration: {self.selected_duration}")
+            if self.takes_medication:
+                parts.append(f"Medication: {self.takes_medication}")
+            return " | ".join(parts)
+
+        return ""
+
+    def run_analysis(self):
         try:
+            input_text = self.build_text_for_prediction()
+
             result = self.client.predict(
-                text=self.entered_text,
-                gender=self.selected_gender
+                text=input_text,
+                pain_score=self.selected_pain_score,
+                body_part=self.selected_body_part,
+                duration=self.selected_duration,
+                medication=self.takes_medication,
+                language=self.selected_language,
+                input_method=self.selected_input_method,
             )
+
             self.result_page.set_result(
                 result=result,
-                mode_label="Text / Voice Submission",
-                body_part=None,
-                symptom_label=self.entered_text
+                language=self.selected_language,
+                input_method=self.selected_input_method,
+                body_part=self.selected_body_part,
+                disease=self.selected_disease,
+                duration=self.selected_duration,
+                pain_score=self.selected_pain_score,
+                medication=self.takes_medication,
+                entered_text=input_text
             )
             self.stack.setCurrentWidget(self.result_page)
+
         except Exception as e:
             QMessageBox.critical(self, "Prediction Error", str(e))
 
-    def run_image_analysis(self):
-        try:
-            result = self.client.predict(
-                text=self.selected_disease,
-                gender=self.selected_gender,
-                body_part=self.selected_body_part,
-                pain_score=self.selected_pain_score
-            )
-            self.result_page.set_result(
-                result=result,
-                mode_label="Visual Selection",
-                body_part=self.selected_body_part,
-                symptom_label=self.selected_disease,
-                pain_score=self.selected_pain_score
-            )
-            self.stack.setCurrentWidget(self.result_page)
-        except Exception as e:
-            QMessageBox.critical(self, "Prediction Error", str(e))
-
-    def go_back_from_result(self):
-        if self.selected_disease and self.selected_body_part:
-            self.stack.setCurrentWidget(self.pain_page)
-        else:
-            self.stack.setCurrentWidget(self.input_page)
-
-    def restart_assessment(self):
+    def go_home(self):
+        self.selected_language = None
+        self.selected_input_method = None
         self.selected_body_part = None
         self.selected_disease = None
-        self.selected_pain_score = None
         self.entered_text = ""
+        self.voice_text = ""
+        self.selected_duration = None
+        self.selected_pain_score = None
+        self.takes_medication = None
 
-        self.input_page.reset(keep_gender=True)
+        self.description_page.reset()
+        self.voice_page.reset()
         self.disease_page.reset()
+        self.duration_page.reset()
         self.pain_page.reset()
+        self.medication_page.reset()
         self.result_page.reset()
 
-        self.stack.setCurrentWidget(self.input_page)
+        self.stack.setCurrentWidget(self.welcome_page)

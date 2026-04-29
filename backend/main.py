@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
-import os
+from pathlib import Path
 import joblib
 import traceback
 
@@ -10,7 +10,7 @@ from nlp.extractor import extract_symptoms, extract_duration
 from nlp.rules import detect_negations, detect_danger_terms
 
 try:
-    from app.nlp.extractor import extract_severity_words
+    from nlp.extractor import extract_severity_words
 except ImportError:
     def extract_severity_words(text: str):
         return []
@@ -41,9 +41,13 @@ class PredictResponse(BaseModel):
     body_part: Optional[str] = None
 
 
-BASE_DIR = os.path.dirname(__file__)
-SAVED_DIR = os.path.join(BASE_DIR, "saved")
-MODEL_PATH = os.path.join(SAVED_DIR, "linear_svc.joblib")
+# -----------------------------
+# File paths
+# -----------------------------
+
+BASE_DIR = Path(__file__).resolve().parent  # backend folder
+SAVED_DIR = BASE_DIR / "ml" / "saved"
+MODEL_PATH = SAVED_DIR / "linear_svc.joblib"
 
 model = None
 
@@ -51,11 +55,11 @@ model = None
 def load_model():
     global model
 
-    if not os.path.exists(MODEL_PATH):
+    if not MODEL_PATH.exists():
         raise FileNotFoundError(f"Model not found: {MODEL_PATH}")
 
     model = joblib.load(MODEL_PATH)
-    print("✅ Model loaded successfully")
+    print(f"✅ Model loaded successfully from: {MODEL_PATH}")
 
 
 try:
@@ -94,6 +98,7 @@ def map_prediction_label(prediction):
         "moderate": "moderate",
         "severe": "severe",
     }
+
     return label_map.get(prediction, str(prediction))
 
 
@@ -111,7 +116,11 @@ def predict_label(text: str):
     return prediction, confidence
 
 
-def adjust_prediction(prediction: str, pain_score: Optional[int], body_part: Optional[str]) -> str:
+def adjust_prediction(
+    prediction: str,
+    pain_score: Optional[int],
+    body_part: Optional[str],
+) -> str:
     pred = str(prediction).lower()
     part = str(body_part).lower() if body_part else None
 
@@ -124,13 +133,23 @@ def adjust_prediction(prediction: str, pain_score: Optional[int], body_part: Opt
     if part == "head" and pain_score is not None and pain_score >= 9:
         pred = "severe"
 
-    if part in ["abdomen", "back"] and pain_score is not None and pain_score >= 8 and pred == "mild":
+    if (
+        part in ["abdomen", "back"]
+        and pain_score is not None
+        and pain_score >= 8
+        and pred == "mild"
+    ):
         pred = "moderate"
 
     return pred
 
 
-def generate_recommendation(prediction: str, danger_terms: List[str], pain_score: Optional[int], body_part: Optional[str]) -> str:
+def generate_recommendation(
+    prediction: str,
+    danger_terms: List[str],
+    pain_score: Optional[int],
+    body_part: Optional[str],
+) -> str:
     p = str(prediction).lower()
     part = str(body_part).lower() if body_part else None
 
@@ -145,9 +164,11 @@ def generate_recommendation(prediction: str, danger_terms: List[str], pain_score
 
     if p == "mild":
         return "Symptoms appear mild. Monitor closely and seek routine care if needed."
-    elif p == "moderate":
+
+    if p == "moderate":
         return "Medical review is recommended soon."
-    elif p == "severe":
+
+    if p == "severe":
         return "Seek urgent medical attention immediately."
 
     return "No recommendation available."
@@ -158,7 +179,7 @@ def health():
     return {
         "status": "ok",
         "model_loaded": model is not None,
-        "model_path": MODEL_PATH,
+        "model_path": str(MODEL_PATH),
     }
 
 
@@ -176,12 +197,14 @@ def predict(payload: PredictRequest):
         print("Symptoms:", symptoms)
 
         duration_raw = extract_duration(cleaned)
+
         if isinstance(duration_raw, list):
             duration = ", ".join(str(x) for x in duration_raw) if duration_raw else None
         elif duration_raw is None:
             duration = None
         else:
             duration = str(duration_raw)
+
         print("Duration:", duration)
 
         severity_words = extract_severity_words(cleaned)
@@ -206,6 +229,7 @@ def predict(payload: PredictRequest):
             pain_score=payload.pain_score,
             body_part=payload.body_part,
         )
+
         print("Prediction:", prediction)
 
         recommendation = generate_recommendation(
@@ -225,8 +249,12 @@ def predict(payload: PredictRequest):
             "danger_terms": danger_terms,
             "negations": negations,
             "recommendation": str(recommendation),
-            "pain_score": int(payload.pain_score) if payload.pain_score is not None else None,
-            "body_part": str(payload.body_part) if payload.body_part is not None else None,
+            "pain_score": int(payload.pain_score)
+            if payload.pain_score is not None
+            else None,
+            "body_part": str(payload.body_part)
+            if payload.body_part is not None
+            else None,
         }
 
     except Exception as e:

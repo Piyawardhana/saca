@@ -1,175 +1,145 @@
 from PySide6.QtCore import Signal, Qt
-from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton
-)
+from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame
 
-from .common import BasePage, HeaderBar, card_shadow
+from .common import BasePage
 
 
 class ResultPage(BasePage):
     back_requested = Signal()
-    new_assessment_requested = Signal()
+    home_requested = Signal()
 
     def __init__(self):
         super().__init__()
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(36, 28, 36, 28)
+        root.setContentsMargins(0, 0, 0, 0)
 
-        page_card = QFrame()
-        page_card.setObjectName("PageCard")
-        card_shadow(page_card)
+        shell = self.build_shell()
+        shell_layout = QVBoxLayout(shell)
+        shell_layout.setContentsMargins(20, 20, 20, 20)
+        shell_layout.setSpacing(0)
 
-        layout = QVBoxLayout(page_card)
-        layout.setContentsMargins(34, 30, 34, 30)
-        layout.setSpacing(22)
+        top_row = QHBoxLayout()
+        self.back_button = self.build_back_button()
+        self.back_button.clicked.connect(self.back_requested.emit)
+        top_row.addWidget(self.back_button, 0, Qt.AlignLeft)
+        top_row.addStretch(1)
 
-        self.header = HeaderBar(
-            title="Assessment Result",
-            subtitle="Review the prediction and recommended next step."
+        shell_layout.addLayout(top_row)
+
+        center = QVBoxLayout()
+        center.setSpacing(22)
+        center.addStretch(1)
+
+        title = QLabel("Results")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("font-size: 34px; font-weight: 900; color: #2d2d2d;")
+
+        self.severity_line = QLabel("Severity - High")
+        self.severity_line.setAlignment(Qt.AlignCenter)
+        self.severity_line.setStyleSheet("font-size: 24px; font-weight: 900; color: #2d2d2d;")
+
+        self.red_dot = QLabel("●")
+        self.red_dot.setStyleSheet("font-size: 34px; color: red;")
+
+        sev_row = QHBoxLayout()
+        sev_row.addStretch(1)
+        sev_row.addWidget(self.severity_line)
+        sev_row.addSpacing(10)
+        sev_row.addWidget(self.red_dot)
+        sev_row.addStretch(1)
+
+        advice_box = QFrame()
+        advice_box.setObjectName("ContentCard")
+        advice_box.setFixedWidth(540)
+
+        advice_layout = QVBoxLayout(advice_box)
+        advice_layout.setContentsMargins(24, 24, 24, 24)
+
+        self.recommendation_label = QLabel(
+            "Advice:\n• Drink water\n• Rest\n• Take basic medication\n• See doctor if symptoms worsen"
         )
-        self.header.back_button.clicked.connect(self.back_requested.emit)
-
-        self.mode_label = QLabel("Mode: -")
-        self.mode_label.setStyleSheet("""
-            QLabel {
-                background: #f6f9fd;
-                color: #27476b;
-                border: 1px solid #d5e1ef;
-                border-radius: 12px;
-                padding: 10px 14px;
-                font-size: 13px;
-                font-weight: 700;
-            }
-        """)
-
-        self.severity_badge = QLabel("Severity: -")
-        self.severity_badge.setAlignment(Qt.AlignCenter)
-        self.severity_badge.setMinimumHeight(92)
-        self.severity_badge.setStyleSheet("""
-            QLabel {
-                border-radius: 22px;
-                background: #eef2f7;
-                color: #10233c;
-                font-size: 30px;
-                font-weight: 900;
-                padding: 18px;
-            }
-        """)
-
-        self.summary_label = QLabel("Summary: -")
-        self.summary_label.setWordWrap(True)
-        self.summary_label.setStyleSheet("""
-            QLabel {
-                background: #fbfdff;
-                border: 1px solid #d7e2ef;
-                border-radius: 18px;
-                padding: 18px;
-                font-size: 14px;
-                color: #21384f;
-            }
-        """)
-
-        self.recommendation_label = QLabel("Recommendation: -")
         self.recommendation_label.setWordWrap(True)
         self.recommendation_label.setStyleSheet("""
             QLabel {
-                background: #f8fbff;
-                border: 1px solid #cfe0fb;
-                border-radius: 18px;
-                padding: 18px;
-                font-size: 15px;
-                font-weight: 700;
-                color: #173b73;
+                font-size: 18px;
+                font-weight: 800;
+                color: #111;
+                background: transparent;
             }
         """)
 
-        buttons = QHBoxLayout()
-        buttons.setSpacing(12)
+        advice_layout.addWidget(self.recommendation_label)
 
-        self.new_btn = QPushButton("New Assessment")
-        self.new_btn.setObjectName("PrimaryButton")
-        self.new_btn.clicked.connect(self.new_assessment_requested.emit)
+        advice_row = QHBoxLayout()
+        advice_row.addStretch(1)
+        advice_row.addWidget(advice_box)
+        advice_row.addStretch(1)
 
-        buttons.addStretch(1)
-        buttons.addWidget(self.new_btn)
+        self.ambulance_btn = QPushButton("Contact Ambulance  🚑")
+        self.ambulance_btn.setObjectName("PrimaryButton")
+        self.ambulance_btn.setFixedSize(280, 56)
 
-        layout.addWidget(self.header)
-        layout.addWidget(self.mode_label)
-        layout.addWidget(self.severity_badge)
-        layout.addWidget(self.summary_label)
-        layout.addWidget(self.recommendation_label)
-        layout.addStretch(1)
-        layout.addLayout(buttons)
+        self.doctor_btn = QPushButton("Contact Doctor  🧑‍⚕️")
+        self.doctor_btn.setObjectName("PrimaryButton")
+        self.doctor_btn.setFixedSize(280, 56)
+        self.doctor_btn.clicked.connect(self.home_requested.emit)
 
-        root.addWidget(page_card)
+        action_row = QHBoxLayout()
+        action_row.addStretch(1)
+        action_row.addWidget(self.ambulance_btn)
+        action_row.addSpacing(40)
+        action_row.addWidget(self.doctor_btn)
+        action_row.addStretch(1)
+
+        center.addWidget(title)
+        center.addLayout(sev_row)
+        center.addLayout(advice_row)
+        center.addLayout(action_row)
+        center.addStretch(2)
+
+        shell_layout.addLayout(center, 1)
+        root.addWidget(shell)
 
     def set_result(
         self,
         result: dict,
-        mode_label: str,
+        language: str | None = None,
+        input_method: str | None = None,
         body_part: str | None = None,
-        symptom_label: str | None = None,
-        pain_score: int | None = None
+        disease: str | None = None,
+        duration: str | None = None,
+        pain_score: int | None = None,
+        medication: str | None = None,
+        entered_text: str | None = None
     ):
-        prediction = (result.get("prediction") or "-").strip()
-        recommendation = result.get("recommendation") or "-"
-        symptoms = result.get("symptoms") or []
-        severity_words = result.get("severity_words") or []
+        prediction = (result.get("prediction") or "-").strip().lower()
+        recommendation = result.get("recommendation") or "Drink water\nRest\nTake basic medication\nSee doctor if symptoms worsen"
 
-        badge_style = self._severity_style(prediction)
-        self.severity_badge.setStyleSheet(badge_style)
-        self.severity_badge.setText(f"Severity: {prediction.title()}")
-
-        pieces = [f"Mode: {mode_label}"]
-        if symptom_label:
-            pieces.append(f"Input: {symptom_label}")
-        if body_part:
-            pieces.append(f"Body Area: {body_part.title()}")
-        if pain_score is not None:
-            pieces.append(f"Pain Score: {pain_score}/10")
-        if symptoms:
-            pieces.append(f"Symptoms Found: {', '.join(symptoms)}")
-        if severity_words:
-            pieces.append(f"Severity Words: {', '.join(severity_words)}")
-
-        self.mode_label.setText(f"Mode: {mode_label}")
-        self.summary_label.setText("Summary: " + "  •  ".join(pieces))
-        self.recommendation_label.setText(f"Recommendation: {recommendation}")
-
-    def _severity_style(self, prediction: str) -> str:
-        p = prediction.lower()
-        if p == "mild":
-            bg = "#e9f8ee"
-            border = "#bfe7c9"
-            fg = "#146c36"
-        elif p == "moderate":
-            bg = "#fff8e6"
-            border = "#f0dfab"
-            fg = "#8a6500"
-        elif p == "severe":
-            bg = "#ffe9e9"
-            border = "#efbaba"
-            fg = "#b42318"
+        if prediction == "mild":
+            sev_text = "Severity - Mild"
+            dot_color = "#22C55E"
+        elif prediction == "moderate":
+            sev_text = "Severity - Moderate"
+            dot_color = "#FACC15"
         else:
-            bg = "#eef2f7"
-            border = "#d7e2ef"
-            fg = "#10233c"
+            sev_text = "Severity - High"
+            dot_color = "#FF0000"
 
-        return f"""
-            QLabel {{
-                border-radius: 22px;
-                background: {bg};
-                border: 1px solid {border};
-                color: {fg};
-                font-size: 30px;
-                font-weight: 900;
-                padding: 18px;
-            }}
-        """
+        self.severity_line.setText(sev_text)
+        self.red_dot.setStyleSheet(f"font-size: 34px; color: {dot_color};")
+
+        advice_lines = recommendation.split(". ")
+        formatted = "Advice:\n"
+        for line in advice_lines:
+            line = line.strip()
+            if line:
+                formatted += f"• {line}\n"
+        self.recommendation_label.setText(formatted.strip())
 
     def reset(self):
-        self.mode_label.setText("Mode: -")
-        self.severity_badge.setText("Severity: -")
-        self.summary_label.setText("Summary: -")
-        self.recommendation_label.setText("Recommendation: -")
+        self.severity_line.setText("Severity - High")
+        self.red_dot.setStyleSheet("font-size: 34px; color: red;")
+        self.recommendation_label.setText(
+            "Advice:\n• Drink water\n• Rest\n• Take basic medication\n• See doctor if symptoms worsen"
+        )

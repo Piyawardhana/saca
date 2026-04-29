@@ -1,12 +1,9 @@
 import os
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (
-    QVBoxLayout, QFrame, QGridLayout, QLabel, QWidget,
-    QSizePolicy, QSpacerItem
-)
+from PySide6.QtCore import Signal, Qt
+from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QWidget, QGridLayout, QScrollArea, QSizePolicy, QSpacerItem
 
-from .common import BasePage, ImageCardButton, HeaderBar, card_shadow
+from .common import BasePage, ImageCardButton
 
 
 BODY_PART_DISEASES = {
@@ -50,79 +47,77 @@ class DiseasePage(BasePage):
     def __init__(self, assets_dir: str):
         super().__init__()
         self.assets_dir = assets_dir
-        self.current_body_part = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(36, 28, 36, 28)
+        root.setContentsMargins(0, 0, 0, 0)
 
-        page_card = QFrame()
-        page_card.setObjectName("PageCard")
-        card_shadow(page_card)
+        shell = self.build_shell()
+        shell_layout = QVBoxLayout(shell)
+        shell_layout.setContentsMargins(20, 20, 20, 20)
+        shell_layout.setSpacing(0)
 
-        layout = QVBoxLayout(page_card)
-        layout.setContentsMargins(34, 30, 34, 30)
-        layout.setSpacing(22)
+        top_row = QHBoxLayout()
+        self.back_button = self.build_back_button()
+        self.back_button.clicked.connect(self.back_requested.emit)
+        top_row.addWidget(self.back_button, 0, Qt.AlignLeft)
+        top_row.addStretch(1)
+        shell_layout.addLayout(top_row)
 
-        self.header = HeaderBar(
-            title="Select Matching Symptom",
-            subtitle="Choose the image that best matches the reported condition."
-        )
-        self.header.back_button.clicked.connect(self.back_requested.emit)
+        center = QVBoxLayout()
+        center.setSpacing(16)
 
-        self.context_label = QLabel("Body Area: -")
-        self.context_label.setStyleSheet("""
-            QLabel {
-                background: #f6f9fd;
-                color: #27476b;
-                border: 1px solid #d5e1ef;
-                border-radius: 12px;
-                padding: 10px 14px;
-                font-size: 13px;
-                font-weight: 700;
-                max-width: 220px;
-            }
-        """)
+        self.title_label = QLabel("Select Matching Symptom")
+        self.title_label.setObjectName("PageTitle")
+        self.title_label.setAlignment(Qt.AlignCenter)
+
+        self.context_label = QLabel("Body Part: -")
+        self.context_label.setObjectName("SmallText")
+        self.context_label.setAlignment(Qt.AlignCenter)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("background: transparent; border: none;")
 
         self.grid_host = QWidget()
         self.grid = QGridLayout(self.grid_host)
-        self.grid.setContentsMargins(0, 0, 0, 0)
-        self.grid.setHorizontalSpacing(18)
-        self.grid.setVerticalSpacing(18)
+        self.grid.setContentsMargins(10, 10, 10, 10)
+        self.grid.setHorizontalSpacing(8)
+        self.grid.setVerticalSpacing(8)
 
-        layout.addWidget(self.header)
-        layout.addWidget(self.context_label)
-        layout.addWidget(self.grid_host, 1)
+        scroll.setWidget(self.grid_host)
+        scroll.setMinimumHeight(470)
 
-        root.addWidget(page_card)
+        center.addWidget(self.title_label)
+        center.addWidget(self.context_label)
+        center.addWidget(scroll, 1)
+
+        shell_layout.addLayout(center, 1)
+        root.addWidget(shell)
 
     def load_diseases(self, body_part: str):
-        self.current_body_part = body_part
-        self.context_label.setText(f"Body Area: {body_part.title()}")
-        self._clear_grid()
+        self.context_label.setText(f"Body Part: {body_part.title()}")
+        self.reset_grid()
 
         items = BODY_PART_DISEASES.get(body_part, [])
 
-        for index, (symptom_name, filename) in enumerate(items):
+        for index, (name, filename) in enumerate(items):
             row = index // 3
             col = index % 3
 
             card = ImageCardButton(
-                title=symptom_name,
+                title=name,
                 subtitle="Select to continue",
                 image_path=os.path.join(self.assets_dir, "diseases", filename),
-                value=symptom_name
+                value=name
             )
-            card.setMinimumSize(240, 280)
-            card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             card.clicked_value.connect(self.disease_selected.emit)
-
             self.grid.addWidget(card, row, col)
 
-        # keep columns evenly spaced
         for col in range(3):
             self.grid.setColumnStretch(col, 1)
 
-        # push cards to top instead of weird stretching/overlap feel
         last_row = max(0, (len(items) - 1) // 3 + 1)
         self.grid.addItem(
             QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding),
@@ -132,28 +127,13 @@ class DiseasePage(BasePage):
             3
         )
 
-    def _clear_grid(self):
+    def reset_grid(self):
         while self.grid.count():
             item = self.grid.takeAt(0)
             widget = item.widget()
-            child_layout = item.layout()
-
-            if widget is not None:
+            if widget:
                 widget.deleteLater()
-            elif child_layout is not None:
-                self._clear_layout(child_layout)
-
-    def _clear_layout(self, layout):
-        while layout.count():
-            item = layout.takeAt(0)
-            widget = item.widget()
-            child_layout = item.layout()
-            if widget is not None:
-                widget.deleteLater()
-            elif child_layout is not None:
-                self._clear_layout(child_layout)
 
     def reset(self):
-        self.current_body_part = None
-        self.context_label.setText("Body Area: -")
-        self._clear_grid()
+        self.context_label.setText("Body Part: -")
+        self.reset_grid()
