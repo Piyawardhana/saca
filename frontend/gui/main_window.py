@@ -131,6 +131,13 @@ class MainWindow(QMainWindow):
         )
         self.result_page.home_requested.connect(self.go_home)
 
+        self.language_page.home_requested.connect(self.go_home)
+        self.input_method_page.home_requested.connect(self.go_home)
+        self.description_page.home_requested.connect(self.go_home)
+        self.duration_page.home_requested.connect(self.go_home)
+        self.pain_page.home_requested.connect(self.go_home)
+        self.medication_page.home_requested.connect(self.go_home)
+
     def on_language_selected(self, language: str):
         self.selected_language = language
         self.stack.setCurrentWidget(self.input_method_page)
@@ -211,15 +218,31 @@ class MainWindow(QMainWindow):
         try:
             input_text = self.build_text_for_prediction()
 
-            result = self.client.predict(
+            if not input_text.strip():
+                QMessageBox.warning(
+                    self,
+                    "Missing Input",
+                    "Please provide symptoms before continuing."
+                )
+                return
+
+            response = self.client.predict(
                 text=input_text,
                 pain_score=self.selected_pain_score,
                 body_part=self.selected_body_part,
-                duration=self.selected_duration,
-                medication=self.takes_medication,
-                language=self.selected_language,
-                input_method=self.selected_input_method,
+                age=None,
+                gender=None,
             )
+
+            if not response["success"]:
+                QMessageBox.critical(
+                    self,
+                    "Prediction Error",
+                    response["error"]
+                )
+                return
+
+            result = response["data"]
 
             self.result_page.set_result(
                 result=result,
@@ -232,6 +255,7 @@ class MainWindow(QMainWindow):
                 medication=self.takes_medication,
                 entered_text=input_text
             )
+
             self.stack.setCurrentWidget(self.result_page)
 
         except Exception as e:
@@ -257,3 +281,32 @@ class MainWindow(QMainWindow):
         self.result_page.reset()
 
         self.stack.setCurrentWidget(self.welcome_page)
+
+    def build_text_for_prediction(self) -> str:
+        parts = []
+
+        if self.selected_input_method == "text":
+            if self.entered_text:
+                parts.append(self.entered_text)
+
+        elif self.selected_input_method == "voice":
+            if self.voice_text:
+                parts.append(self.voice_text)
+
+        elif self.selected_input_method == "image":
+            if self.selected_body_part:
+                parts.append(f"Body part: {self.selected_body_part}")
+
+            if self.selected_disease:
+                parts.append(f"Symptom or condition selected: {self.selected_disease}")
+
+        if self.selected_duration:
+            parts.append(f"Duration: {self.selected_duration}")
+
+        if self.selected_pain_score is not None:
+            parts.append(f"Pain score: {self.selected_pain_score} out of 10")
+
+        if self.takes_medication:
+            parts.append(f"Takes medication: {self.takes_medication}")
+
+        return ". ".join(parts)

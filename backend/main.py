@@ -1,36 +1,51 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from pathlib import Path
 import joblib
 import traceback
+import numpy as np
+import pandas as pd
 
 from nlp.preprocess import normalize_text
-from nlp.extractor import extract_symptoms, extract_duration
-from nlp.rules import detect_negations, detect_danger_terms
+from nlp.extractor import (
+    extract_symptoms,
+    extract_duration,
+    extract_severity_words
+)
+from nlp.rules import (
+    detect_negations,
+    detect_danger_terms,
+    adjust_severity_with_rules,
+    generate_recommendation
+)
 
-try:
-    from nlp.extractor import extract_severity_words
-except ImportError:
-    def extract_severity_words(text: str):
-        return []
+
+app = FastAPI(title="SACA Medical Triage API")
 
 
-app = FastAPI(title="TIRP Medical Triage API")
-
+# ============================================================
+# Request / Response Models
+# ============================================================
 
 class PredictRequest(BaseModel):
     text: str
     age: Optional[int] = None
     gender: Optional[str] = None
-    pain_score: Optional[int] = None
+    pain_score: Optional[int] = Field(default=None, ge=0, le=10)
     body_part: Optional[str] = None
+
+
+class DiseasePrediction(BaseModel):
+    name: str
+    probability: float
 
 
 class PredictResponse(BaseModel):
     cleaned_text: str
-    prediction: str
+    severity: str
     confidence: Optional[float]
+    possible_diseases: List[DiseasePrediction]
     symptoms: List[str]
     duration: Optional[str]
     severity_words: List[str]
@@ -39,54 +54,197 @@ class PredictResponse(BaseModel):
     recommendation: str
     pain_score: Optional[int] = None
     body_part: Optional[str] = None
+    disclaimer: str
 
 
-# -----------------------------
-# File paths
-# -----------------------------
+# ============================================================
+# File Paths
+# ============================================================
 
-BASE_DIR = Path(__file__).resolve().parent  # backend folder
-SAVED_DIR = BASE_DIR / "ml" / "saved"
-MODEL_PATH = SAVED_DIR / "linear_svc.joblib"
+BASE_DIR = Path(__file__).resolve().parent
 
-model = None
+# Your current severity model path
+SEVERITY_MODEL_PATH = (
+    BASE_DIR / "ml" / "saved" / "linear_svc.joblib"
+)
+
+# Your disease model path
+DISEASE_MODEL_PATH = (
+    BASE_DIR / "ml" / "saved" / "disease" / "disease_model.joblib"
+)
 
 
-def load_model():
-    global model
+# ============================================================
+# Global Models
+# ============================================================
 
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"Model not found: {MODEL_PATH}")
+severity_model = None
+severity_vectorizer = None
 
-    model = joblib.load(MODEL_PATH)
-    print(f"✅ Model loaded successfully from: {MODEL_PATH}")
+disease_model = None
+disease_vectorizer = None
+
+
+# ============================================================
+# Model Loading Helpers
+# ============================================================
+
+def unwrap_model_and_vectorizer(loaded_object, model_name: str):
+    """
+    Handles two save formats.
+
+    Format 1:
+        joblib.dump(pipeline, path)
+
+    Format 2:
+        joblib.dump({
+            "model": model,
+            "vectorizer": vectorizer
+        }, path)
+
+    Returns:
+        model, vectorizer
+
+    If the object is already a sklearn Pipeline, vectorizer is None.
+    """
+
+    if not isinstance(loaded_object, dict):
+        return loaded_object, None
+
+    print(f"\n{model_name} file is a dictionary.")
+    print(f"{model_name} keys:", list(loaded_object.keys()))
+
+    model_keys = [
+        "model",
+        "pipeline",
+        "linear_svc",
+        "severity_model",
+        "disease_model",
+        "best_model",
+        "classifier",
+        "clf"
+    ]
+
+    vectorizer_keys = [
+        "vectorizer",
+        "tfidf",
+        "tfidf_vectorizer",
+        "severity_vectorizer",
+        "disease_vectorizer"
+    ]
+
+    found_model = None
+    found_vectorizer = None
+
+    for key in model_keys:
+        if key in loaded_object:
+            found_model = loaded_object[key]
+            break
+
+    for key in vectorizer_keys:
+        if key in loaded_object:
+            found_vectorizer = loaded_object[key]
+            break
+
+    if found_model is None:
+        for value in loaded_object.values():
+            if hasattr(value, "predict"):
+                found_model = value
+                break
+
+    if found_vectorizer is None:
+        for value in loaded_object.values():
+            if hasattr(value, "transform") and not hasattr(value, "predict"):
+                found_vectorizer = value
+                break
+
+    if found_model is None:
+        raise RuntimeError(
+            f"No valid model found inside {model_name} dictionary. "
+            f"Available keys: {list(loaded_object.keys())}"
+        )
+
+    return found_model, found_vectorizer
+
+
+def load_models():
+    global severity_model, severity_vectorizer
+    global disease_model, disease_vectorizer
+
+    if not SEVERITY_MODEL_PATH.exists():
+        raise FileNotFoundError(
+            f"Severity model not found: {SEVERITY_MODEL_PATH}\n"
+            "Check your saved model path or run your severity training script."
+        )
+
+    if not DISEASE_MODEL_PATH.exists():
+        raise FileNotFoundError(
+            f"Disease model not found: {DISEASE_MODEL_PATH}\n"
+            "Run: python ml/models/disease/compare_disease_models.py"
+        )
+
+    loaded_severity = joblib.load(SEVERITY_MODEL_PATH)
+    loaded_disease = joblib.load(DISEASE_MODEL_PATH)
+
+    severity_model, severity_vectorizer = unwrap_model_and_vectorizer(
+        loaded_severity,
+        "Severity model"
+    )
+
+    disease_model, disease_vectorizer = unwrap_model_and_vectorizer(
+        loaded_disease,
+        "Disease model"
+    )
+
+    print("\n✅ Models loaded successfully")
+    print("Severity model path:", SEVERITY_MODEL_PATH)
+    print("Disease model path:", DISEASE_MODEL_PATH)
+
+    print("\nModel types:")
+    print("Severity model:", type(severity_model))
+    print("Severity vectorizer:", type(severity_vectorizer))
+    print("Disease model:", type(disease_model))
+    print("Disease vectorizer:", type(disease_vectorizer))
+
+    print("\nCapability check:")
+    print("Severity has predict:", hasattr(severity_model, "predict"))
+    print("Severity has predict_proba:", hasattr(severity_model, "predict_proba"))
+    print("Disease has predict:", hasattr(disease_model, "predict"))
+    print("Disease has predict_proba:", hasattr(disease_model, "predict_proba"))
 
 
 try:
-    load_model()
+    load_models()
 except Exception:
-    print("❌ Error loading model:")
+    print("\n❌ Error loading models:")
     print(traceback.format_exc())
 
 
-def get_actual_model():
-    global model
+def get_severity_model():
+    if severity_model is None:
+        raise RuntimeError(
+            "Severity model is not loaded. "
+            "Check /health and confirm the severity model path."
+        )
 
-    if model is None:
-        raise RuntimeError("Model not loaded")
-
-    if isinstance(model, dict):
-        print("Model is dict. Keys:", list(model.keys()))
-
-        if "linear_svc" in model:
-            return model["linear_svc"]
-
-        return list(model.values())[0]
-
-    return model
+    return severity_model
 
 
-def map_prediction_label(prediction):
+def get_disease_model():
+    if disease_model is None:
+        raise RuntimeError(
+            "Disease model is not loaded. "
+            "Check /health and confirm the disease model path."
+        )
+
+    return disease_model
+
+
+# ============================================================
+# Severity Prediction
+# ============================================================
+
+def map_severity_label(prediction):
     label_map = {
         0: "mild",
         1: "moderate",
@@ -99,87 +257,261 @@ def map_prediction_label(prediction):
         "severe": "severe",
     }
 
-    return label_map.get(prediction, str(prediction))
+    prediction = str(prediction).lower().strip()
+
+    return label_map.get(prediction, prediction)
 
 
-def predict_label(text: str):
-    actual_model = get_actual_model()
+def predict_severity(cleaned_text: str):
+    """
+    Supports:
+    1. Full sklearn Pipeline:
+       pipeline.predict([cleaned_text])
 
-    raw_prediction = actual_model.predict([text])[0]
-    prediction = map_prediction_label(raw_prediction)
+    2. Separate vectorizer + model:
+       vectorizer.transform([cleaned_text])
+       model.predict(X)
+    """
 
-    confidence = None
-    if hasattr(actual_model, "predict_proba"):
-        probs = actual_model.predict_proba([text])[0]
-        confidence = float(max(probs))
+    model = get_severity_model()
 
-    return prediction, confidence
+    if severity_vectorizer is not None:
+        X = severity_vectorizer.transform([cleaned_text])
+        raw_prediction = model.predict(X)[0]
+
+        confidence = None
+        if hasattr(model, "predict_proba"):
+            probabilities = model.predict_proba(X)[0]
+            confidence = float(max(probabilities))
+
+    else:
+        raw_prediction = model.predict([cleaned_text])[0]
+
+        confidence = None
+        if hasattr(model, "predict_proba"):
+            probabilities = model.predict_proba([cleaned_text])[0]
+            confidence = float(max(probabilities))
+
+    severity = map_severity_label(raw_prediction)
+
+    return severity, confidence
 
 
-def adjust_prediction(
-    prediction: str,
-    pain_score: Optional[int],
-    body_part: Optional[str],
-) -> str:
-    pred = str(prediction).lower()
-    part = str(body_part).lower() if body_part else None
+# ============================================================
+# Disease Prediction Helpers
+# ============================================================
 
-    if pain_score is not None and pain_score >= 8 and pred == "mild":
-        pred = "moderate"
+def get_age_group(age: Optional[int]) -> str:
+    if age is None:
+        return "adult"
 
-    if part == "chest" and pain_score is not None and pain_score >= 7:
-        pred = "severe"
+    if age < 16:
+        return "child"
 
-    if part == "head" and pain_score is not None and pain_score >= 9:
-        pred = "severe"
+    if age >= 65:
+        return "older_adult"
+
+    return "adult"
+
+
+def estimate_duration_days(duration_text: Optional[str]) -> int:
+    if not duration_text:
+        return 1
+
+    duration_text = str(duration_text).lower()
 
     if (
-        part in ["abdomen", "back"]
-        and pain_score is not None
-        and pain_score >= 8
-        and pred == "mild"
+        "today" in duration_text
+        or "this morning" in duration_text
+        or "right now" in duration_text
+        or "suddenly" in duration_text
     ):
-        pred = "moderate"
+        return 0
 
-    return pred
+    if "yesterday" in duration_text:
+        return 1
+
+    if "few days" in duration_text:
+        return 3
+
+    if "several days" in duration_text:
+        return 5
+
+    if "week" in duration_text:
+        return 7
+
+    if "month" in duration_text:
+        return 30
+
+    return 1
 
 
-def generate_recommendation(
-    prediction: str,
-    danger_terms: List[str],
+def build_disease_input_dataframe(
+    cleaned_text: str,
+    age: Optional[int],
+    gender: Optional[str],
     pain_score: Optional[int],
     body_part: Optional[str],
-) -> str:
-    p = str(prediction).lower()
-    part = str(body_part).lower() if body_part else None
+    symptoms: List[str],
+    danger_terms: List[str],
+    duration: Optional[str],
+):
+    """
+    Must match disease training columns:
 
-    if danger_terms:
-        return "Urgent warning signs detected. Seek immediate medical attention."
+    user_text
+    age_group
+    sex
+    body_part
+    red_flags_present
+    duration_days
+    pain_score
+    symptom_count
+    """
 
-    if part == "chest" and pain_score is not None and pain_score >= 7:
-        return "Chest pain with a high pain score detected. Seek urgent medical attention immediately."
+    age_group = get_age_group(age)
 
-    if part == "head" and pain_score is not None and pain_score >= 9:
-        return "Severe head pain detected. Seek urgent medical attention immediately."
+    sex = str(gender).lower().strip() if gender else "not specified"
 
-    if p == "mild":
-        return "Symptoms appear mild. Monitor closely and seek routine care if needed."
+    selected_body_part = str(body_part).lower().strip() if body_part else "unknown"
 
-    if p == "moderate":
-        return "Medical review is recommended soon."
+    red_flags_present = "yes" if danger_terms else "no"
 
-    if p == "severe":
-        return "Seek urgent medical attention immediately."
+    selected_pain_score = pain_score if pain_score is not None else 5
 
-    return "No recommendation available."
+    symptom_count = len(symptoms) if symptoms else 0
+
+    duration_days = estimate_duration_days(duration)
+
+    return pd.DataFrame([{
+        "user_text": cleaned_text,
+        "age_group": age_group,
+        "sex": sex,
+        "body_part": selected_body_part,
+        "red_flags_present": red_flags_present,
+        "duration_days": duration_days,
+        "pain_score": selected_pain_score,
+        "symptom_count": symptom_count
+    }])
+
+
+def predict_top_diseases(
+    cleaned_text: str,
+    age: Optional[int],
+    gender: Optional[str],
+    pain_score: Optional[int],
+    body_part: Optional[str],
+    symptoms: List[str],
+    danger_terms: List[str],
+    duration: Optional[str],
+    top_n: int = 3
+):
+    """
+    Supports:
+    1. Full sklearn Pipeline trained with a DataFrame.
+    2. Separate vectorizer + model trained on text only.
+
+    Best case:
+    model supports predict_proba(), so we return top 3 diseases.
+    """
+
+    model = get_disease_model()
+
+    input_df = build_disease_input_dataframe(
+        cleaned_text=cleaned_text,
+        age=age,
+        gender=gender,
+        pain_score=pain_score,
+        body_part=body_part,
+        symptoms=symptoms,
+        danger_terms=danger_terms,
+        duration=duration
+    )
+
+    # Case 1: Full pipeline model
+    if disease_vectorizer is None:
+        if hasattr(model, "predict_proba"):
+            probabilities = model.predict_proba(input_df)[0]
+            classes = model.classes_
+
+            top_indices = np.argsort(probabilities)[::-1][:top_n]
+
+            return [
+                {
+                    "name": str(classes[index]),
+                    "probability": round(float(probabilities[index]), 3)
+                }
+                for index in top_indices
+            ]
+
+        prediction = model.predict(input_df)[0]
+
+        return [
+            {
+                "name": str(prediction),
+                "probability": 1.0
+            }
+        ]
+
+    # Case 2: Separate text vectorizer + model
+    X = disease_vectorizer.transform([cleaned_text])
+
+    if hasattr(model, "predict_proba"):
+        probabilities = model.predict_proba(X)[0]
+        classes = model.classes_
+
+        top_indices = np.argsort(probabilities)[::-1][:top_n]
+
+        return [
+            {
+                "name": str(classes[index]),
+                "probability": round(float(probabilities[index]), 3)
+            }
+            for index in top_indices
+        ]
+
+    prediction = model.predict(X)[0]
+
+    return [
+        {
+            "name": str(prediction),
+            "probability": 1.0
+        }
+    ]
+
+
+# ============================================================
+# API Routes
+# ============================================================
+
+@app.get("/")
+def root():
+    return {
+        "message": "SACA Medical Triage API is running"
+    }
 
 
 @app.get("/health")
 def health():
     return {
         "status": "ok",
-        "model_loaded": model is not None,
-        "model_path": str(MODEL_PATH),
+        "severity_model_loaded": severity_model is not None,
+        "disease_model_loaded": disease_model is not None,
+        "severity_model_path": str(SEVERITY_MODEL_PATH),
+        "disease_model_path": str(DISEASE_MODEL_PATH),
+        "severity_model_type": str(type(severity_model)),
+        "disease_model_type": str(type(disease_model)),
+        "severity_vectorizer_loaded": severity_vectorizer is not None,
+        "disease_vectorizer_loaded": disease_vectorizer is not None,
+        "severity_supports_predict": (
+            hasattr(severity_model, "predict") if severity_model is not None else False
+        ),
+        "disease_supports_predict": (
+            hasattr(disease_model, "predict") if disease_model is not None else False
+        ),
+        "disease_supports_predict_proba": (
+            hasattr(disease_model, "predict_proba") if disease_model is not None else False
+        )
     }
 
 
@@ -190,71 +522,81 @@ def predict(payload: PredictRequest):
 
         raw_text = payload.text or ""
         cleaned = normalize_text(raw_text)
-        print("Cleaned:", cleaned)
+
+        print("Cleaned text:", cleaned)
 
         symptoms = extract_symptoms(cleaned)
         symptoms = list(symptoms) if symptoms else []
-        print("Symptoms:", symptoms)
 
-        duration_raw = extract_duration(cleaned)
-
-        if isinstance(duration_raw, list):
-            duration = ", ".join(str(x) for x in duration_raw) if duration_raw else None
-        elif duration_raw is None:
-            duration = None
-        else:
-            duration = str(duration_raw)
-
-        print("Duration:", duration)
+        duration = extract_duration(cleaned)
 
         severity_words = extract_severity_words(cleaned)
         severity_words = list(severity_words) if severity_words else []
-        print("Severity words:", severity_words)
 
         danger_terms = detect_danger_terms(cleaned)
         danger_terms = list(danger_terms) if danger_terms else []
-        print("Danger terms:", danger_terms)
 
         negations = detect_negations(cleaned)
         negations = list(negations) if negations else []
+
+        print("Symptoms:", symptoms)
+        print("Duration:", duration)
+        print("Severity words:", severity_words)
+        print("Danger terms:", danger_terms)
         print("Negations:", negations)
 
         if cleaned.strip():
-            prediction, confidence = predict_label(cleaned)
+            severity, confidence = predict_severity(cleaned)
         else:
-            prediction, confidence = "mild", None
+            severity, confidence = "mild", None
 
-        prediction = adjust_prediction(
-            prediction=prediction,
-            pain_score=payload.pain_score,
-            body_part=payload.body_part,
-        )
-
-        print("Prediction:", prediction)
-
-        recommendation = generate_recommendation(
-            prediction=prediction,
+        severity = adjust_severity_with_rules(
+            severity=severity,
             danger_terms=danger_terms,
             pain_score=payload.pain_score,
-            body_part=payload.body_part,
+            body_part=payload.body_part
         )
 
+        possible_diseases = predict_top_diseases(
+            cleaned_text=cleaned,
+            age=payload.age,
+            gender=payload.gender,
+            pain_score=payload.pain_score,
+            body_part=payload.body_part,
+            symptoms=symptoms,
+            danger_terms=danger_terms,
+            duration=duration,
+            top_n=3
+        )
+
+        recommendation = generate_recommendation(
+            severity=severity,
+            danger_terms=danger_terms,
+            pain_score=payload.pain_score,
+            body_part=payload.body_part
+        )
+
+        print("Final severity:", severity)
+        print("Possible diseases:", possible_diseases)
+
         return {
-            "cleaned_text": str(cleaned),
-            "prediction": str(prediction),
-            "confidence": float(confidence) if confidence is not None else None,
+            "cleaned_text": cleaned,
+            "severity": severity,
+            "confidence": confidence,
+            "possible_diseases": possible_diseases,
             "symptoms": symptoms,
             "duration": duration,
             "severity_words": severity_words,
             "danger_terms": danger_terms,
             "negations": negations,
-            "recommendation": str(recommendation),
-            "pain_score": int(payload.pain_score)
-            if payload.pain_score is not None
-            else None,
-            "body_part": str(payload.body_part)
-            if payload.body_part is not None
-            else None,
+            "recommendation": recommendation,
+            "pain_score": payload.pain_score,
+            "body_part": payload.body_part,
+            "disclaimer": (
+                "This is not a medical diagnosis. "
+                "This system suggests possible conditions and severity guidance only. "
+                "Please consult a healthcare professional."
+            )
         }
 
     except Exception as e:

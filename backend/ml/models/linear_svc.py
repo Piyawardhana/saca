@@ -10,7 +10,7 @@ from sklearn.svm import LinearSVC
 
 from label_config import REVERSE_LABEL_MAP
 
-DATA_PATH = Path("../../data/processed/cleaned_train.csv")
+DATA_PATH = Path("../../data/processed/cleaned_train1.csv")
 SAVE_DIR = Path("../saved")
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
