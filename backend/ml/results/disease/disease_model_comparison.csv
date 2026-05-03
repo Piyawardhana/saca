@@ -1,0 +1,4 @@
+Model,Validation_Accuracy,Validation_Weighted_F1,Validation_Top3_Accuracy,Model_Path
+Logistic Regression,0.9882,0.9882,1.0,C:\Users\piyaw\Desktop\SACA\backend\ml\saved\disease\disease_logistic_regression.joblib
+Linear SVC,0.9882,0.9882,1.0,C:\Users\piyaw\Desktop\SACA\backend\ml\saved\disease\disease_linear_svc.joblib
+Multinomial Naive Bayes,0.9876,0.9875,1.0,C:\Users\piyaw\Desktop\SACA\backend\ml\saved\disease\disease_naive_bayes.joblib

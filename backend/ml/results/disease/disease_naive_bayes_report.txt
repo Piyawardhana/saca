@@ -1,0 +1,45 @@
+Multinomial Naive Bayes Disease Model
+Split: validation
+Accuracy: 0.9876
+Weighted F1: 0.9875
+Top-3 Accuracy: 1.0000
+
+                          precision    recall  f1-score   support
+
+       allergic rhinitis       1.00      1.00      1.00       140
+                  anemia       0.96      0.99      0.98       137
+ anxiety or panic attack       1.00      1.00      1.00       140
+            appendicitis       0.99      0.98      0.99       133
+            asthma flare       1.00      0.99      0.99       137
+              bronchitis       0.99      1.00      1.00       134
+              cellulitis       1.00      1.00      1.00       136
+             common cold       1.00      1.00      1.00       144
+          conjunctivitis       1.00      1.00      1.00       135
+covid-like viral illness       0.96      0.93      0.95       138
+             dehydration       0.99      0.96      0.98       130
+          dental abscess       1.00      1.00      1.00       139
+           ear infection       1.00      1.00      1.00       139
+            eczema flare       1.00      1.00      1.00       126
+          food poisoning       0.95      0.81      0.87       134
+      fracture or sprain       1.00      1.00      1.00       138
+               gastritis       0.99      1.00      0.99       136
+         gastroenteritis       0.84      0.96      0.89       134
+                    gerd       1.00      1.00      1.00       137
+            heart attack       1.00      1.00      1.00       138
+           hyperglycemia       1.00      1.00      1.00       137
+            hypoglycemia       1.00      1.00      1.00       135
+               influenza       0.94      0.96      0.95       139
+        kidney infection       1.00      1.00      1.00       137
+              meningitis       1.00      1.00      1.00       138
+                migraine       1.00      1.00      1.00       136
+           muscle strain       1.00      1.00      1.00       137
+               pneumonia       0.99      1.00      1.00       141
+                  sepsis       1.00      1.00      1.00       136
+               sinusitis       1.00      1.00      1.00       132
+                  stroke       1.00      1.00      1.00       134
+        tension headache       1.00      1.00      1.00       136
+ urinary tract infection       1.00      1.00      1.00       136
+
+                accuracy                           0.99      4499
+               macro avg       0.99      0.99      0.99      4499
+            weighted avg       0.99      0.99      0.99      4499
