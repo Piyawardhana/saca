@@ -1,13 +1,51 @@
 import os
+import re
 
-from PySide6.QtCore import Signal, Qt, QSize
+from PySide6.QtCore import Signal, Qt, QSize, QThread
 from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QPushButton, QGraphicsDropShadowEffect
+    QPushButton, QMessageBox, QGraphicsDropShadowEffect,
+    QSizePolicy
 )
 
 from .common import BasePage, ActionCardButton, card_shadow, PRIMARY_DARK, CREAM
+
+
+class VoiceListenThread(QThread):
+    recognised = Signal(str)
+    failed = Signal(str)
+
+    def run(self):
+        try:
+            import speech_recognition as sr
+
+            recognizer = sr.Recognizer()
+
+            with sr.Microphone() as source:
+                recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                audio = recognizer.listen(source, timeout=5, phrase_time_limit=4)
+
+            text = recognizer.recognize_google(audio)
+            self.recognised.emit(text)
+
+        except ImportError:
+            self.failed.emit(
+                "SpeechRecognition or PyAudio is not installed. Please install them first."
+            )
+        except Exception as e:
+            error_name = e.__class__.__name__
+
+            if error_name == "WaitTimeoutError":
+                self.failed.emit("No speech detected. Please try again.")
+            elif error_name == "UnknownValueError":
+                self.failed.emit("Sorry, I could not understand that. Please try again.")
+            elif error_name == "RequestError":
+                self.failed.emit(
+                    "Speech service is unavailable. Please check your internet connection."
+                )
+            else:
+                self.failed.emit(str(e))
 
 
 class DurationPage(BasePage):
@@ -15,15 +53,24 @@ class DurationPage(BasePage):
     home_requested = Signal()
     duration_selected = Signal(str)
 
-    def __init__(self):
+    def __init__(self, voice_mode_enabled=False):
         super().__init__()
+
+        self.page_title = "How long have you had this?"
+        self.voice_thread = None
+        self.voice_mode_enabled = voice_mode_enabled
 
         base_dir = os.path.dirname(
             os.path.dirname(
                 os.path.dirname(os.path.abspath(__file__))
             )
         )
+
         icon_dir = os.path.join(base_dir, "assets", "icons")
+
+        home_icon_path = os.path.join(icon_dir, "home.png")
+        speaker_icon_path = os.path.join(icon_dir, "speaker.png")
+        microphone_icon_path = os.path.join(icon_dir, "voice.png")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -56,29 +103,7 @@ class DurationPage(BasePage):
         """)
         self.back_button.clicked.connect(self.back_requested.emit)
 
-        self.home_button = QPushButton()
-        self.home_button.setCursor(Qt.PointingHandCursor)
-        self.home_button.setFixedSize(56, 56)
-        self.home_button.setStyleSheet(f"""
-            QPushButton {{
-                background: {PRIMARY_DARK};
-                border: none;
-                border-radius: 14px;
-            }}
-            QPushButton:hover {{
-                background: #4a252b;
-            }}
-            QPushButton:pressed {{
-                background: #1f0e11;
-            }}
-        """)
-
-        home_icon_path = os.path.join(icon_dir, "home.png")
-        if os.path.exists(home_icon_path):
-            self.home_button.setIcon(QIcon(home_icon_path))
-            self.home_button.setIconSize(QSize(30, 30))
-
-        card_shadow(self.home_button, blur=18, y=4)
+        self.home_button = self.icon_button(home_icon_path)
         self.home_button.clicked.connect(self.home_requested.emit)
 
         top_row.addWidget(self.back_button, 0, Qt.AlignLeft)
@@ -88,10 +113,10 @@ class DurationPage(BasePage):
         shell_layout.addLayout(top_row)
 
         center = QVBoxLayout()
-        center.setSpacing(36)
+        center.setSpacing(26)
         center.addStretch(1)
 
-        title = QLabel("How long have you had this?")
+        title = QLabel(self.page_title)
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet(f"""
             QLabel {{
@@ -109,30 +134,91 @@ class DurationPage(BasePage):
         title_shadow.setColor(QColor(0, 0, 0, 120))
         title.setGraphicsEffect(title_shadow)
 
+        self.speaker_button = self.icon_button(speaker_icon_path)
+        self.speaker_button.clicked.connect(self.speak_title)
+
+        title_row = QHBoxLayout()
+        title_row.addStretch(1)
+        title_row.addWidget(title)
+        title_row.addSpacing(18)
+        title_row.addWidget(self.speaker_button, 0, Qt.AlignVCenter)
+        title_row.addStretch(1)
+
         card = QFrame()
         card.setObjectName("ContentCard")
-        card.setFixedWidth(540)
+        card.setFixedWidth(560)
+        card.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Minimum)
         card_shadow(card, blur=28, y=9)
 
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(40, 34, 40, 34)
-        card_layout.setSpacing(20)
+        card_layout.setContentsMargins(40, 30, 40, 30)
+        card_layout.setSpacing(14)
 
-        options = [
+        self.voice_panel = QFrame()
+        self.voice_panel.setFixedHeight(128)
+        self.voice_panel.setStyleSheet("""
+            QFrame {
+                background: transparent;
+                border: none;
+            }
+        """)
+
+        voice_panel_layout = QVBoxLayout(self.voice_panel)
+        voice_panel_layout.setContentsMargins(0, 0, 0, 10)
+        voice_panel_layout.setSpacing(12)
+
+        self.voice_status_label = QLabel(
+            "Tap the microphone and say:"
+        )
+        self.voice_status_label.setWordWrap(True)
+        self.voice_status_label.setAlignment(Qt.AlignCenter)
+        self.voice_status_label.setStyleSheet(f"""
+            QLabel {{
+                font-family: Marcellus;
+                font-size: 20px;
+                font-weight: 700;
+                color: {PRIMARY_DARK};
+                background: transparent;
+            }}
+        """)
+
+        self.voice_input_button = self.voice_button(microphone_icon_path)
+        self.voice_input_button.clicked.connect(self.start_voice_input)
+
+        voice_row = QHBoxLayout()
+        voice_row.setContentsMargins(0, 0, 0, 0)
+        voice_row.setSpacing(0)
+        voice_row.addStretch(1)
+        voice_row.addWidget(self.voice_input_button)
+        voice_row.addStretch(1)
+
+        voice_panel_layout.addWidget(self.voice_status_label)
+        voice_panel_layout.addLayout(voice_row)
+
+        card_layout.addWidget(self.voice_panel)
+        card_layout.addSpacing(18)
+
+        self.options = [
             ("1 Day", "1 Day"),
             ("1–2 Days", "1-2 Days"),
             ("1 Week", "1 Week"),
             ("More than a week", "More than a week"),
         ]
 
-        for text, value in options:
-            btn = ActionCardButton(text, "", value, min_width=420, min_height=90)
+        self.option_buttons = {}
+
+        for text, value in self.options:
+            btn = ActionCardButton(text, "", value, min_width=420, min_height=78)
             btn.clicked_value.connect(self.duration_selected.emit)
+            self.option_buttons[value] = btn
 
             row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(0)
             row.addStretch(1)
             row.addWidget(btn)
             row.addStretch(1)
+
             card_layout.addLayout(row)
 
         card_row = QHBoxLayout()
@@ -140,12 +226,206 @@ class DurationPage(BasePage):
         card_row.addWidget(card)
         card_row.addStretch(1)
 
-        center.addWidget(title)
+        center.addLayout(title_row)
         center.addLayout(card_row)
         center.addStretch(2)
 
         shell_layout.addLayout(center, 1)
         root.addWidget(shell)
 
+        self.set_voice_mode_enabled(self.voice_mode_enabled)
+
+    def set_voice_mode_enabled(self, enabled: bool):
+        self.voice_mode_enabled = enabled
+
+        self.speaker_button.setVisible(enabled)
+        self.voice_panel.setVisible(enabled)
+
+        if enabled:
+            self.voice_status_label.setText(
+                "Tap the microphone and say:"
+            )
+            self.voice_input_button.setEnabled(True)
+        else:
+            self.voice_input_button.setEnabled(False)
+
+    def icon_button(self, icon_path: str):
+        button = QPushButton()
+        button.setCursor(Qt.PointingHandCursor)
+        button.setFixedSize(56, 56)
+
+        button.setStyleSheet(f"""
+            QPushButton {{
+                background: {PRIMARY_DARK};
+                border: none;
+                border-radius: 14px;
+            }}
+            QPushButton:hover {{
+                background: #4a252b;
+            }}
+            QPushButton:pressed {{
+                background: #1f0e11;
+            }}
+        """)
+
+        if os.path.exists(icon_path):
+            button.setIcon(QIcon(icon_path))
+            button.setIconSize(QSize(30, 30))
+
+        card_shadow(button, blur=18, y=4)
+        return button
+
+    def voice_button(self, icon_path: str):
+        button = QPushButton()
+        button.setCursor(Qt.PointingHandCursor)
+        button.setFixedSize(72, 72)
+        button.setToolTip("Speak your answer")
+
+        button.setStyleSheet(f"""
+            QPushButton {{
+                background: {PRIMARY_DARK};
+                color: {CREAM};
+                border: none;
+                border-radius: 36px;
+                font-size: 32px;
+                font-weight: 900;
+            }}
+            QPushButton:hover {{
+                background: #4a252b;
+            }}
+            QPushButton:pressed {{
+                background: #1f0e11;
+            }}
+            QPushButton:disabled {{
+                background: #8a7679;
+                color: #f0ebdb;
+            }}
+        """)
+
+        if os.path.exists(icon_path):
+            button.setIcon(QIcon(icon_path))
+            button.setIconSize(QSize(38, 38))
+        else:
+            button.setText("🎤")
+
+        card_shadow(button, blur=20, y=5)
+        return button
+
+    def speak_title(self):
+        if not self.voice_mode_enabled:
+            return
+
+        try:
+            import pyttsx3
+
+            engine = pyttsx3.init()
+            engine.setProperty("rate", 155)
+            engine.say(self.page_title)
+            engine.runAndWait()
+        except Exception as e:
+            QMessageBox.warning(self, "Speaker Error", str(e))
+
+    def start_voice_input(self):
+        if not self.voice_mode_enabled:
+            return
+
+        self.voice_input_button.setEnabled(False)
+        self.voice_status_label.setText("Listening... please speak now.")
+
+        self.voice_thread = VoiceListenThread()
+        self.voice_thread.recognised.connect(self.handle_voice_text)
+        self.voice_thread.failed.connect(self.handle_voice_error)
+        self.voice_thread.finished.connect(
+            lambda: self.voice_input_button.setEnabled(True)
+        )
+        self.voice_thread.start()
+
+    def handle_voice_text(self, spoken_text: str):
+        matched_value = self.match_duration_from_voice(spoken_text)
+
+        if matched_value:
+            self.voice_status_label.setText(
+                f'Heard: "{spoken_text}"\nSelected: {matched_value}'
+            )
+            self.duration_selected.emit(matched_value)
+        else:
+            self.voice_status_label.setText(
+                f'Heard: "{spoken_text}"\nPlease say one of: 1 day, 1 to 2 days, 1 week, or more than a week.'
+            )
+
+    def handle_voice_error(self, message: str):
+        self.voice_status_label.setText(message)
+        QMessageBox.warning(self, "Voice Input Error", message)
+
+    def match_duration_from_voice(self, spoken_text: str):
+        text = spoken_text.lower().strip()
+
+        text = text.replace("–", "-")
+        text = text.replace("one", "1")
+        text = text.replace("two", "2")
+        text = re.sub(r"\s+", " ", text)
+
+        more_week_patterns = [
+            "more than a week",
+            "over a week",
+            "longer than a week",
+            "more than one week",
+            "more than 1 week",
+            "above a week",
+            "more than seven days",
+            "more than 7 days",
+            "long time"
+        ]
+
+        one_week_patterns = [
+            "1 week",
+            "one week",
+            "a week",
+            "seven days",
+            "7 days"
+        ]
+
+        one_two_day_patterns = [
+            "1-2 days",
+            "1 2 days",
+            "1 to 2 days",
+            "one to two days",
+            "one or two days",
+            "two days",
+            "2 days",
+            "couple of days",
+            "a couple of days"
+        ]
+
+        one_day_patterns = [
+            "1 day",
+            "one day",
+            "a day",
+            "single day",
+            "today",
+            "yesterday"
+        ]
+
+        if self.contains_any(text, more_week_patterns):
+            return "More than a week"
+
+        if self.contains_any(text, one_week_patterns):
+            return "1 Week"
+
+        if self.contains_any(text, one_two_day_patterns):
+            return "1-2 Days"
+
+        if self.contains_any(text, one_day_patterns):
+            return "1 Day"
+
+        return None
+
+    def contains_any(self, text: str, patterns):
+        return any(pattern in text for pattern in patterns)
+
     def reset(self):
-        pass
+        if self.voice_mode_enabled:
+            self.voice_status_label.setText(
+                "Tap the microphone and say:"
+            )
+            self.voice_input_button.setEnabled(True)

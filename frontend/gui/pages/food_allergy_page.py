@@ -37,15 +37,15 @@ class VoiceListenThread(QThread):
                 self.failed.emit(str(e))
 
 
-class MedicationPage(BasePage):
+class FoodAllergyPage(BasePage):
     back_requested = Signal()
     home_requested = Signal()
-    medication_selected = Signal(str)
+    allergies_submitted = Signal(str)
 
     def __init__(self, voice_mode_enabled=False):
         super().__init__()
 
-        self.page_title = "Do you take any medications?"
+        self.page_title = "Do you have any food allergies?"
         self.voice_mode_enabled = voice_mode_enabled
         self.voice_thread = None
 
@@ -166,8 +166,8 @@ class MedicationPage(BasePage):
 
         yes_btn = ActionCardButton("Yes", "", "Yes", min_width=420, min_height=95)
         no_btn = ActionCardButton("No", "", "No", min_width=420, min_height=95)
-        yes_btn.clicked_value.connect(self.medication_selected.emit)
-        no_btn.clicked_value.connect(self.medication_selected.emit)
+        yes_btn.clicked_value.connect(self.allergies_submitted.emit)
+        no_btn.clicked_value.connect(self.allergies_submitted.emit)
 
         for btn in (yes_btn, no_btn):
             row = QHBoxLayout()
@@ -270,7 +270,7 @@ class MedicationPage(BasePage):
         answer = self.match_yes_no(spoken_text)
         if answer:
             self.voice_status_label.setText(f'Heard: "{spoken_text}"\nSelected: {answer}')
-            self.medication_selected.emit(answer)
+            self.allergies_submitted.emit(answer)
         else:
             self.voice_status_label.setText(f'Heard: "{spoken_text}"\nPlease say yes or no.')
 
@@ -280,8 +280,8 @@ class MedicationPage(BasePage):
 
     def match_yes_no(self, spoken_text: str):
         text = spoken_text.lower().strip()
-        yes_words = ["yes", "yeah", "yep", "i do", "i take", "taking", "medication", "medications"]
-        no_words = ["no", "nope", "not", "none", "i don't", "i do not", "no medication", "no medications"]
+        yes_words = ["yes", "yeah", "yep", "i do", "i have", "have allergies", "allergies"]
+        no_words = ["no", "nope", "not", "none", "i don't", "i do not", "no allergies"]
         if any(word in text for word in no_words):
             return "No"
         if any(word in text for word in yes_words):
@@ -290,3 +290,6 @@ class MedicationPage(BasePage):
 
     def reset(self):
         self.set_voice_mode_enabled(False)
+
+    def reset_page(self):
+        self.reset()

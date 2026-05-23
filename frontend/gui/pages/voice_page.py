@@ -1,7 +1,8 @@
 import os
+import pyttsx3
 
-from PySide6.QtCore import Signal, QThread, Qt
-from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtCore import Signal, QThread, Qt, QSize
+from PySide6.QtGui import QColor, QPixmap, QIcon
 from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
     QPushButton, QMessageBox, QFrame, QGraphicsDropShadowEffect
@@ -20,7 +21,6 @@ except ImportError:
 class RecordButton(QPushButton):
     def __init__(self, text: str, icon_path: str):
         super().__init__()
-
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedSize(340, 80)
 
@@ -45,7 +45,6 @@ class RecordButton(QPushButton):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(28, 0, 28, 0)
-        layout.setSpacing(0)
 
         content = QHBoxLayout()
         content.setSpacing(10)
@@ -63,29 +62,19 @@ class RecordButton(QPushButton):
             }}
         """)
 
-        self.icon_label = QLabel()
-        self.icon_label.setFixedSize(44, 44)
-        self.icon_label.setAlignment(Qt.AlignCenter)
-        self.icon_label.setStyleSheet("""
-            QLabel {
-                background: transparent;
-                border: none;
-            }
-        """)
+        icon_label = QLabel()
+        icon_label.setFixedSize(44, 44)
+        icon_label.setAlignment(Qt.AlignCenter)
+        icon_label.setStyleSheet("background: transparent; border: none;")
 
         pixmap = QPixmap(icon_path)
         if not pixmap.isNull():
-            self.icon_label.setPixmap(
-                pixmap.scaled(
-                    40,
-                    40,
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation
-                )
+            icon_label.setPixmap(
+                pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
 
         content.addWidget(self.text_label)
-        content.addWidget(self.icon_label)
+        content.addWidget(icon_label)
 
         layout.addStretch(1)
         layout.addLayout(content)
@@ -97,6 +86,7 @@ class RecordButton(QPushButton):
 
 class VoicePage(BasePage):
     back_requested = Signal()
+    home_requested = Signal()
     next_requested = Signal(str)
 
     def __init__(self):
@@ -109,7 +99,11 @@ class VoicePage(BasePage):
                 os.path.dirname(os.path.abspath(__file__))
             )
         )
-        voice_icon_path = os.path.join(base_dir, "assets", "icons", "voice.png")
+        icon_dir = os.path.join(base_dir, "assets", "icons")
+
+        voice_icon_path = os.path.join(icon_dir, "voice.png")
+        home_icon_path = os.path.join(icon_dir, "home.png")
+        speaker_icon_path = os.path.join(icon_dir, "speaker.png")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -142,15 +136,22 @@ class VoicePage(BasePage):
         """)
         self.back_button.clicked.connect(self.back_requested.emit)
 
+        self.home_button = self.icon_button(home_icon_path)
+        self.home_button.clicked.connect(self.home_requested.emit)
+
         top_row.addWidget(self.back_button, 0, Qt.AlignLeft)
         top_row.addStretch(1)
+        top_row.addWidget(self.home_button, 0, Qt.AlignRight)
+
         shell_layout.addLayout(top_row)
 
         center = QVBoxLayout()
         center.setSpacing(38)
         center.addStretch(1)
 
-        title = QLabel("What is your problem?")
+        self.page_title = "What is your problem?"
+
+        title = QLabel(self.page_title)
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet(f"""
             QLabel {{
@@ -168,6 +169,16 @@ class VoicePage(BasePage):
         title_shadow.setOffset(0, 6)
         title_shadow.setColor(QColor(0, 0, 0, 120))
         title.setGraphicsEffect(title_shadow)
+
+        self.speaker_button = self.icon_button(speaker_icon_path)
+        self.speaker_button.clicked.connect(self.speak_title)
+
+        title_row = QHBoxLayout()
+        title_row.addStretch(1)
+        title_row.addWidget(title)
+        title_row.addSpacing(18)
+        title_row.addWidget(self.speaker_button, 0, Qt.AlignVCenter)
+        title_row.addStretch(1)
 
         card = QFrame()
         card.setObjectName("ContentCard")
@@ -265,7 +276,7 @@ class VoicePage(BasePage):
         next_row.addWidget(next_btn)
         next_row.addStretch(1)
 
-        center.addWidget(title)
+        center.addLayout(title_row)
         center.addLayout(card_row)
         center.addLayout(next_row)
         center.addStretch(2)
@@ -277,13 +288,46 @@ class VoicePage(BasePage):
             self.record_btn.setEnabled(False)
             self.record_btn.set_label("Microphone Not Available")
 
+    def icon_button(self, icon_path: str):
+        button = QPushButton()
+        button.setCursor(Qt.PointingHandCursor)
+        button.setFixedSize(56, 56)
+        button.setStyleSheet(f"""
+            QPushButton {{
+                background: {PRIMARY_DARK};
+                border: none;
+                border-radius: 14px;
+            }}
+            QPushButton:hover {{
+                background: #4a252b;
+            }}
+            QPushButton:pressed {{
+                background: #1f0e11;
+            }}
+        """)
+
+        if os.path.exists(icon_path):
+            button.setIcon(QIcon(icon_path))
+            button.setIconSize(QSize(30, 30))
+
+        card_shadow(button, blur=18, y=4)
+        return button
+
+    def speak_title(self):
+        try:
+            engine = pyttsx3.init()
+            engine.setProperty("rate", 155)
+            engine.say("What is your problem?" "Tap the button and speak")
+            engine.runAndWait()
+        except Exception as e:
+            QMessageBox.warning(self, "Speaker Error", str(e))
+
     def capture_voice(self):
         if not VOICE_AVAILABLE:
             QMessageBox.warning(self, "Microphone", "Voice input is not available.")
             return
 
         self.transcript_box.clear()
-
         self.record_btn.setEnabled(False)
         self.record_btn.set_label("Listening")
         self.status_label.setText("Listening...")

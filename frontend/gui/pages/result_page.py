@@ -1,11 +1,22 @@
 from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QGraphicsDropShadowEffect, QScrollArea, QWidget
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QFrame,
+    QGraphicsDropShadowEffect,
+    QScrollArea,
+    QWidget,
 )
 
 from .common import BasePage, card_shadow, PRIMARY_DARK, CREAM
+from ..translations import (
+    text,
+    disease_label,
+    normalise_language,
+)
 
 
 class ResultPage(BasePage):
@@ -15,6 +26,8 @@ class ResultPage(BasePage):
     def __init__(self):
         super().__init__()
 
+        self.current_language = "English"
+
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
@@ -23,12 +36,10 @@ class ResultPage(BasePage):
         shell_layout.setContentsMargins(30, 25, 30, 25)
         shell_layout.setSpacing(8)
 
-        # -----------------------------
-        # Top row
-        # -----------------------------
         top_row = QHBoxLayout()
 
         self.back_button = self.build_back_button()
+        self.back_button.setText(text("back", self.current_language))
         self.back_button.setStyleSheet(f"""
             QPushButton {{
                 background: {PRIMARY_DARK};
@@ -51,13 +62,10 @@ class ResultPage(BasePage):
 
         shell_layout.addLayout(top_row)
 
-        # -----------------------------
-        # Title
-        # -----------------------------
-        title = QLabel("Results")
-        title.setAlignment(Qt.AlignCenter)
-        title.setFixedHeight(75)
-        title.setStyleSheet(f"""
+        self.title_label = QLabel(text("results", self.current_language))
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.title_label.setFixedHeight(75)
+        self.title_label.setStyleSheet(f"""
             QLabel {{
                 font-family: Marcellus;
                 font-size: 54px;
@@ -68,33 +76,27 @@ class ResultPage(BasePage):
             }}
         """)
 
-        title_shadow = QGraphicsDropShadowEffect(title)
+        title_shadow = QGraphicsDropShadowEffect(self.title_label)
         title_shadow.setBlurRadius(35)
         title_shadow.setOffset(0, 5)
         title_shadow.setColor(QColor(0, 0, 0, 100))
-        title.setGraphicsEffect(title_shadow)
+        self.title_label.setGraphicsEffect(title_shadow)
 
-        shell_layout.addWidget(title)
+        shell_layout.addWidget(self.title_label)
 
-        # -----------------------------
-        # Main card
-        # -----------------------------
         main_row = QHBoxLayout()
         main_row.addStretch(1)
 
         self.main_card = QFrame()
         self.main_card.setObjectName("ContentCard")
         self.main_card.setFixedWidth(960)
-        self.main_card.setMaximumHeight(690)
+        self.main_card.setMaximumHeight(600)
         card_shadow(self.main_card, blur=30, y=10)
 
         main_card_layout = QVBoxLayout(self.main_card)
         main_card_layout.setContentsMargins(38, 28, 38, 28)
         main_card_layout.setSpacing(16)
 
-        # -----------------------------
-        # Severity section
-        # -----------------------------
         severity_card = QFrame()
         severity_card.setStyleSheet("""
             QFrame {
@@ -109,7 +111,7 @@ class ResultPage(BasePage):
         severity_layout.setContentsMargins(28, 18, 28, 18)
         severity_layout.setSpacing(14)
 
-        self.severity_title = QLabel("Severity Level")
+        self.severity_title = QLabel(text("severity_level", self.current_language))
         self.severity_title.setStyleSheet(f"""
             QLabel {{
                 font-family: Marcellus;
@@ -120,7 +122,7 @@ class ResultPage(BasePage):
             }}
         """)
 
-        self.severity_value = QLabel("Not Available")
+        self.severity_value = QLabel(text("not_available", self.current_language))
         self.severity_value.setAlignment(Qt.AlignCenter)
         self.severity_value.setMinimumWidth(190)
         self.severity_value.setStyleSheet("""
@@ -135,7 +137,6 @@ class ResultPage(BasePage):
             }
         """)
 
-        # Animated severity glow
         self.severity_glow = QGraphicsDropShadowEffect(self.severity_value)
         self.severity_glow.setOffset(0, 0)
         self.severity_glow.setBlurRadius(20)
@@ -156,52 +157,53 @@ class ResultPage(BasePage):
 
         main_card_layout.addWidget(severity_card)
 
-        # -----------------------------
-        # Two-column section
-        # -----------------------------
         content_row = QHBoxLayout()
         content_row.setSpacing(16)
 
-        # Conditions
         self.conditions_card = self.make_section_card()
         self.conditions_layout = QVBoxLayout(self.conditions_card)
         self.conditions_layout.setContentsMargins(24, 20, 24, 20)
         self.conditions_layout.setSpacing(10)
 
-        conditions_title = self.make_section_title("Possible Conditions")
+        self.conditions_title = self.make_section_title(
+            text("possible_conditions", self.current_language)
+        )
+
+        self.conditions_scroll = QScrollArea()
+        self.conditions_scroll.setWidgetResizable(True)
+        self.conditions_scroll.setFrameShape(QFrame.NoFrame)
+        self.conditions_scroll.setMinimumHeight(190)
+        self.conditions_scroll.setMaximumHeight(230)
+        self.conditions_scroll.setStyleSheet(self.scroll_style())
+
+        conditions_content = QWidget()
+        conditions_content_layout = QVBoxLayout(conditions_content)
+        conditions_content_layout.setContentsMargins(0, 0, 0, 0)
+
         self.conditions_text = self.make_text_label()
+        conditions_content_layout.addWidget(self.conditions_text)
+        conditions_content_layout.addStretch(1)
 
-        self.conditions_layout.addWidget(conditions_title)
-        self.conditions_layout.addWidget(self.conditions_text)
+        self.conditions_scroll.setWidget(conditions_content)
 
-        # Recommendation with scroll
+        self.conditions_layout.addWidget(self.conditions_title)
+        self.conditions_layout.addWidget(self.conditions_scroll)
+
         self.advice_card = self.make_section_card()
         self.advice_layout = QVBoxLayout(self.advice_card)
         self.advice_layout.setContentsMargins(24, 20, 24, 20)
         self.advice_layout.setSpacing(10)
 
-        advice_title = self.make_section_title("Recommendation")
+        self.advice_title = self.make_section_title(
+            text("recommendation", self.current_language)
+        )
 
         self.advice_scroll = QScrollArea()
         self.advice_scroll.setWidgetResizable(True)
         self.advice_scroll.setFrameShape(QFrame.NoFrame)
-        self.advice_scroll.setMinimumHeight(135)
-        self.advice_scroll.setMaximumHeight(165)
-        self.advice_scroll.setStyleSheet("""
-            QScrollArea {
-                background: transparent;
-                border: none;
-            }
-            QScrollBar:vertical {
-                background: transparent;
-                width: 10px;
-                margin: 0px;
-            }
-            QScrollBar::handle:vertical {
-                background: #9b8a7a;
-                border-radius: 5px;
-            }
-        """)
+        self.advice_scroll.setMinimumHeight(190)
+        self.advice_scroll.setMaximumHeight(230)
+        self.advice_scroll.setStyleSheet(self.scroll_style())
 
         advice_content = QWidget()
         advice_content_layout = QVBoxLayout(advice_content)
@@ -213,7 +215,7 @@ class ResultPage(BasePage):
 
         self.advice_scroll.setWidget(advice_content)
 
-        self.advice_layout.addWidget(advice_title)
+        self.advice_layout.addWidget(self.advice_title)
         self.advice_layout.addWidget(self.advice_scroll)
 
         content_row.addWidget(self.conditions_card, 1)
@@ -221,60 +223,7 @@ class ResultPage(BasePage):
 
         main_card_layout.addLayout(content_row)
 
-        # -----------------------------
-        # Details scroll section
-        # -----------------------------
-        details_card = self.make_section_card()
-        details_card.setMinimumHeight(190)
-
-        details_layout = QVBoxLayout(details_card)
-        details_layout.setContentsMargins(24, 20, 24, 20)
-        details_layout.setSpacing(10)
-
-        details_title = self.make_section_title("Detected Information")
-
-        self.details_scroll = QScrollArea()
-        self.details_scroll.setWidgetResizable(True)
-        self.details_scroll.setFrameShape(QFrame.NoFrame)
-        self.details_scroll.setMinimumHeight(130)
-        self.details_scroll.setMaximumHeight(170)
-        self.details_scroll.setStyleSheet("""
-            QScrollArea {
-                background: transparent;
-                border: none;
-            }
-            QScrollBar:vertical {
-                background: transparent;
-                width: 10px;
-                margin: 0px;
-            }
-            QScrollBar::handle:vertical {
-                background: #9b8a7a;
-                border-radius: 5px;
-            }
-        """)
-
-        details_content = QWidget()
-        details_content_layout = QVBoxLayout(details_content)
-        details_content_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.details_text = self.make_text_label(font_size=16)
-        details_content_layout.addWidget(self.details_text)
-        details_content_layout.addStretch(1)
-
-        self.details_scroll.setWidget(details_content)
-
-        details_layout.addWidget(details_title)
-        details_layout.addWidget(self.details_scroll)
-
-        main_card_layout.addWidget(details_card)
-
-        # -----------------------------
-        # Disclaimer
-        # -----------------------------
-        self.disclaimer_label = QLabel(
-            "This is not a medical diagnosis. Please consult a healthcare professional."
-        )
+        self.disclaimer_label = QLabel(text("disclaimer", self.current_language))
         self.disclaimer_label.setWordWrap(True)
         self.disclaimer_label.setAlignment(Qt.AlignCenter)
         self.disclaimer_label.setStyleSheet("""
@@ -290,20 +239,17 @@ class ResultPage(BasePage):
 
         main_card_layout.addWidget(self.disclaimer_label)
 
-        # -----------------------------
-        # Buttons
-        # -----------------------------
         action_row = QHBoxLayout()
         action_row.setSpacing(28)
         action_row.addStretch(1)
 
-        self.ambulance_btn = QPushButton("Contact Ambulance 🚑")
+        self.ambulance_btn = QPushButton(text("contact_ambulance", self.current_language))
         self.ambulance_btn.setCursor(Qt.PointingHandCursor)
         self.ambulance_btn.setFixedSize(300, 58)
         self.ambulance_btn.setStyleSheet(self.action_button_style())
         card_shadow(self.ambulance_btn, blur=18, y=5)
 
-        self.start_again_btn = QPushButton("Start Again 🧑‍⚕️")
+        self.start_again_btn = QPushButton(text("start_again", self.current_language))
         self.start_again_btn.setCursor(Qt.PointingHandCursor)
         self.start_again_btn.setFixedSize(300, 58)
         self.start_again_btn.setStyleSheet(self.action_button_style())
@@ -324,9 +270,22 @@ class ResultPage(BasePage):
 
         self.reset()
 
-    # ============================================================
-    # UI helpers
-    # ============================================================
+    def scroll_style(self):
+        return """
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background: transparent;
+                width: 10px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #9b8a7a;
+                border-radius: 5px;
+            }
+        """
 
     def make_section_card(self):
         card = QFrame()
@@ -340,8 +299,8 @@ class ResultPage(BasePage):
         card_shadow(card, blur=15, y=4)
         return card
 
-    def make_section_title(self, text):
-        label = QLabel(text)
+    def make_section_title(self, title_text):
+        label = QLabel(title_text)
         label.setStyleSheet(f"""
             QLabel {{
                 font-family: Marcellus;
@@ -355,7 +314,7 @@ class ResultPage(BasePage):
         return label
 
     def make_text_label(self, font_size=18):
-        label = QLabel("Not available")
+        label = QLabel(text("not_available", self.current_language))
         label.setWordWrap(True)
         label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         label.setStyleSheet(f"""
@@ -390,9 +349,16 @@ class ResultPage(BasePage):
             }}
         """
 
-    # ============================================================
-    # Data rendering
-    # ============================================================
+    def apply_language(self, language: str | None):
+        self.current_language = normalise_language(language)
+
+        self.back_button.setText(text("back", self.current_language))
+        self.title_label.setText(text("results", self.current_language))
+        self.severity_title.setText(text("severity_level", self.current_language))
+        self.conditions_title.setText(text("possible_conditions", self.current_language))
+        self.advice_title.setText(text("recommendation", self.current_language))
+        self.ambulance_btn.setText(text("contact_ambulance", self.current_language))
+        self.start_again_btn.setText(text("start_again", self.current_language))
 
     def set_result(
         self,
@@ -404,68 +370,61 @@ class ResultPage(BasePage):
         duration: str | None = None,
         pain_score: int | None = None,
         medication: str | None = None,
-        entered_text: str | None = None
+        entered_text: str | None = None,
+        food_allergies: str | None = None,
     ):
+        self.apply_language(language)
+
         severity = (
             result.get("severity")
             or result.get("prediction")
+            or result.get("predicted_label")
             or "unknown"
         )
         severity = str(severity).strip().lower()
 
-        recommendation = result.get("recommendation") or "No recommendation available."
-        possible_diseases = result.get("possible_diseases") or []
+        recommendation = (
+            result.get("recommendation")
+            or result.get("advice")
+            or text("no_recommendation", self.current_language)
+        )
 
-        symptoms = result.get("symptoms") or []
-        danger_terms = result.get("danger_terms") or []
-        severity_words = result.get("severity_words") or []
-        negations = result.get("negations") or []
-        api_duration = result.get("duration")
+        possible_diseases = (
+            result.get("possible_diseases")
+            or result.get("conditions")
+            or []
+        )
 
         self.render_severity(severity)
         self.render_possible_diseases(possible_diseases, disease)
         self.render_recommendation(recommendation)
-        self.render_details(
-            entered_text=entered_text,
-            input_method=input_method,
-            language=language,
-            body_part=body_part,
-            duration=duration or api_duration,
-            pain_score=pain_score,
-            medication=medication,
-            symptoms=symptoms,
-            severity_words=severity_words,
-            danger_terms=danger_terms,
-            negations=negations
-        )
 
-        disclaimer = result.get(
-            "disclaimer",
-            "This is not a medical diagnosis. Please consult a healthcare professional."
-        )
+        disclaimer = result.get("disclaimer") or text("disclaimer", self.current_language)
         self.disclaimer_label.setText(disclaimer)
 
     def render_severity(self, severity: str):
+        severity = str(severity).strip().lower()
+
         if severity == "mild":
-            self.severity_value.setText("MILD")
+            self.severity_value.setText(text("mild", self.current_language))
             bg = "#22C55E"
             glow = QColor(34, 197, 94, 210)
             self.ambulance_btn.hide()
 
         elif severity == "moderate":
-            self.severity_value.setText("MODERATE")
+            self.severity_value.setText(text("moderate", self.current_language))
             bg = "#D99A20"
             glow = QColor(217, 154, 32, 220)
             self.ambulance_btn.hide()
 
         elif severity == "severe":
-            self.severity_value.setText("SEVERE")
+            self.severity_value.setText(text("severe", self.current_language))
             bg = "#DC2626"
             glow = QColor(220, 38, 38, 230)
             self.ambulance_btn.show()
 
         else:
-            self.severity_value.setText("UNKNOWN")
+            self.severity_value.setText(text("unknown", self.current_language))
             bg = "#777777"
             glow = QColor(119, 119, 119, 180)
             self.ambulance_btn.hide()
@@ -492,99 +451,52 @@ class ResultPage(BasePage):
             lines = []
 
             for index, item in enumerate(possible_diseases, start=1):
-                name = str(item.get("name", "Unknown")).title()
-                probability = item.get("probability")
-
-                if probability is None:
-                    lines.append(f"{index}. {name}")
+                if isinstance(item, dict):
+                    name = str(
+                        item.get("name")
+                        or item.get("condition")
+                        or item.get("disease")
+                        or "Unknown"
+                    ).title()
                 else:
-                    try:
-                        percent = float(probability) * 100
-                        lines.append(f"{index}. {name}  —  {percent:.1f}%")
-                    except Exception:
-                        lines.append(f"{index}. {name}")
+                    name = str(item).title()
+
+                name = disease_label(name, self.current_language)
+                lines.append(f"{index}. {name}")
 
             self.conditions_text.setText("\n".join(lines))
             return
 
         if selected_disease:
             self.conditions_text.setText(
-                f"Selected symptom/condition:\n{selected_disease}\n\n"
-                "Disease prediction will be added after the disease model is connected."
+                f"{text('selected_condition', self.current_language)}:\n"
+                f"{disease_label(selected_disease, self.current_language)}\n\n"
+                f"{text('prediction_not_connected', self.current_language)}"
             )
             return
 
-        self.conditions_text.setText(
-            "Disease prediction will be added after the disease model is connected."
-        )
+        self.conditions_text.setText(text("prediction_not_connected", self.current_language))
 
     def render_recommendation(self, recommendation: str):
-        recommendation = str(recommendation).replace("\n", " ")
+        recommendation = str(recommendation).strip()
+
+        if not recommendation:
+            self.advice_text.setText(text("no_recommendation", self.current_language))
+            return
+
+        recommendation = recommendation.replace("\n", " ")
         parts = [p.strip() for p in recommendation.split(".") if p.strip()]
 
         if not parts:
-            self.advice_text.setText("No recommendation available.")
+            self.advice_text.setText(text("no_recommendation", self.current_language))
             return
 
         self.advice_text.setText("\n".join(f"• {part}" for part in parts))
 
-    def render_details(
-        self,
-        entered_text: str | None,
-        input_method: str | None,
-        language: str | None,
-        body_part: str | None,
-        duration: str | None,
-        pain_score: int | None,
-        medication: str | None,
-        symptoms: list,
-        severity_words: list,
-        danger_terms: list,
-        negations: list
-    ):
-        lines = []
-
-        if entered_text:
-            lines.append(f"Input: {entered_text}")
-
-        if input_method:
-            lines.append(f"Input method: {input_method}")
-
-        if language:
-            lines.append(f"Language: {language}")
-
-        if body_part:
-            lines.append(f"Body part: {body_part}")
-
-        if duration:
-            lines.append(f"Duration: {duration}")
-
-        if pain_score is not None:
-            lines.append(f"Pain score: {pain_score}/10")
-
-        if medication:
-            lines.append(f"Medication: {medication}")
-
-        if symptoms:
-            lines.append("Detected symptoms: " + ", ".join(symptoms))
-        else:
-            lines.append("Detected symptoms: None")
-
-        if severity_words:
-            lines.append("Severity words: " + ", ".join(severity_words))
-
-        if danger_terms:
-            lines.append("Warning signs: " + ", ".join(danger_terms))
-        else:
-            lines.append("Warning signs: None")
-
-        if negations:
-            lines.append("Negations: " + ", ".join(negations))
-
-        self.details_text.setText("\n".join(f"• {line}" for line in lines))
-
     def reset(self):
-        self.severity_value.setText("NOT AVAILABLE")
+        self.apply_language(self.current_language)
+
+        self.severity_value.setText(text("not_available", self.current_language).upper())
         self.severity_value.setStyleSheet("""
             QLabel {
                 font-family: Marcellus;
@@ -598,12 +510,7 @@ class ResultPage(BasePage):
         """)
         self.severity_glow.setColor(QColor(119, 119, 119, 180))
 
-        self.conditions_text.setText(
-            "Disease prediction will be added after the disease model is connected."
-        )
-        self.advice_text.setText("No recommendation available.")
-        self.details_text.setText("Not available.")
-        self.disclaimer_label.setText(
-            "This is not a medical diagnosis. Please consult a healthcare professional."
-        )
+        self.conditions_text.setText(text("prediction_not_connected", self.current_language))
+        self.advice_text.setText(text("no_recommendation", self.current_language))
+        self.disclaimer_label.setText(text("disclaimer", self.current_language))
         self.ambulance_btn.hide()
