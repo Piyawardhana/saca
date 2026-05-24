@@ -101,14 +101,16 @@ class _VoiceOtherPainPageState extends State<VoiceOtherPainPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     HeadingWithMic(
-                      text: t(
-                        'Any other pain in your body?',
-                        'Kurunpa kutjupa pika nyinanyi?',
-                      ),
-                      speakText:
-                          'Any other pain in your body? Say neck pain, shoulder pain, hand pain, knee pain, foot pain, throat pain, ear pain, eye pain, or no other pain.',
-                      fontSize: 28,
-                    ),
+  text: t(
+    'Any other pain in your body?',
+    'Kurunpa kutjupa pika nyinanyi?',
+  ),
+  speakText: t(
+    'Any other pain in your body? Say neck pain, shoulder pain, hand pain, knee pain, foot pain, throat pain, ear pain, eye pain, or no other pain.',
+    'Kurunpa kutjupa pika nyinanyi? Neck pika, shoulder pika, mara pika, knee pika, tjina pika, throat pika, ear pika, eye pika, munu wiya wangkara.',
+  ),
+  isEnglish: widget.isEnglish,
+),
                     const SizedBox(height: 16),
                     Container(
                       width: double.infinity,

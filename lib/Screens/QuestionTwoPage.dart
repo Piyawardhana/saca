@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:saca_project/Components/AppBackground.dart';
 import 'package:saca_project/Components/CustomButton.dart';
@@ -26,11 +25,11 @@ class QuestionTwoPage extends StatefulWidget {
 }
 
 class _QuestionTwoPageState extends State<QuestionTwoPage> {
-  final Map<String, double> severityValues = {};
+  int selectedPainScore = 5;
 
   String t(String en, String pit) => widget.isEnglish ? en : pit;
 
-  bool shouldShowSeveritySlider(String item) {
+  bool shouldUseForSeverity(String item) {
     final s = item.toLowerCase().trim();
 
     final blockedItems = [
@@ -47,162 +46,226 @@ class _QuestionTwoPageState extends State<QuestionTwoPage> {
     return !blockedItems.contains(s);
   }
 
-  List<String> get severityItems =>
-      widget.symptoms.where(shouldShowSeveritySlider).toList();
+  List<String> get painItems =>
+      widget.symptoms.where(shouldUseForSeverity).toList();
 
-  @override
-  void initState() {
-    super.initState();
-    for (final symptom in severityItems) {
-      severityValues[symptom] = 5;
-    }
+  String get severity {
+    if (selectedPainScore <= 3) return 'Low';
+    if (selectedPainScore <= 6) return 'Moderate';
+    return 'High';
   }
 
-  double get overallValue {
-    if (severityValues.isEmpty) return 5;
-    return severityValues.values.reduce((a, b) => a + b) /
-        severityValues.length;
-  }
-
-  String get overallSeverity => _severityLabel(overallValue);
-
-  String _severityLabel(double value) {
-    if (value <= 3) return t('Low', 'Low');
-    if (value <= 6) return t('Moderate', 'Moderate');
+  String get severityText {
+    if (selectedPainScore <= 3) return t('Low', 'Low');
+    if (selectedPainScore <= 6) return t('Moderate', 'Moderate');
     return t('High', 'High');
   }
 
-  Color _severityColor(double value) {
-    if (value <= 3) return Colors.green;
-    if (value <= 6) return Colors.orange;
+  Color get severityColor {
+    if (selectedPainScore <= 3) return Colors.green;
+    if (selectedPainScore <= 6) return Colors.orange;
     return Colors.red;
   }
 
-  Widget _glassCard({
-    required Widget child,
-    EdgeInsets padding = const EdgeInsets.all(22),
-  }) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(26),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          width: 780,
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.48),
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.55),
-              width: 1.4,
+  Widget _painScoreButton(int score) {
+    final selected = selectedPainScore == score;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedPainScore = score;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 52,
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFE8BE2F) : const Color(0xFF30161A),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: Colors.orange.withOpacity(0.45),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ]
+              : [],
+        ),
+        child: Text(
+          '$score',
+          style: TextStyle(
+            color: selected ? const Color(0xFF30161A) : Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _severityScaleCard() {
+    return Container(
+      width: 760,
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.72),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.16),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            alignment: WrapAlignment.center,
+            children: List.generate(
+              10,
+              (index) => _painScoreButton(index + 1),
             ),
           ),
-          child: child,
-        ),
+          const SizedBox(height: 24),
+
+          Container(
+            width: 520,
+            height: 20,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              gradient: const LinearGradient(
+                colors: [
+                  Colors.green,
+                  Colors.yellow,
+                  Colors.orange,
+                  Colors.red,
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          const SizedBox(
+            width: 560,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Low',
+                  style: TextStyle(
+                    color: Color(0xFF30161A),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  'Moderate',
+                  style: TextStyle(
+                    color: Color(0xFF30161A),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  'High',
+                  style: TextStyle(
+                    color: Color(0xFF30161A),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 22),
+
+          Text(
+            '${t('Selected severity', 'Pika level')}: $severityText',
+            style: TextStyle(
+              color: severityColor,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+
+          if (painItems.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              '${t('For', 'For')}: ${painItems.join(', ')}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF30161A),
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
 
   PreferredSizeWidget _appBar(BuildContext context) {
     return AppBar(
-      backgroundColor: Colors.white.withOpacity(0.72),
+      backgroundColor: Colors.white.withOpacity(0.95),
       elevation: 0,
       surfaceTintColor: Colors.transparent,
       leading: IconButton(
         onPressed: () => Navigator.pop(context),
-        icon: const Icon(Icons.arrow_back_ios_new_rounded,
-            color: Color(0xFF30161A)),
+        icon: const Icon(
+          Icons.arrow_back_ios_new_rounded,
+          color: Color(0xFF30161A),
+        ),
       ),
       title: const Row(
         children: [
           Icon(Icons.favorite_rounded, color: Color(0xFF30161A)),
           SizedBox(width: 10),
-          Text('SACA',
-              style: TextStyle(
-                  color: Color(0xFF30161A), fontWeight: FontWeight.w900)),
+          Text(
+            'SACA',
+            style: TextStyle(
+              color: Color(0xFF30161A),
+              fontWeight: FontWeight.w900,
+              fontSize: 25,
+            ),
+          ),
         ],
       ),
-    );
-  }
-
-  Widget _pageTitle() {
-    return HeadingWithMic(
-      text: t('Rate pain severity', 'Pika level nintila'),
-      speakText:
-          'Rate only the pain severity. Move the slider for each selected pain area.',
-    );
-  }
-
-  Widget _symptomSeverityCard(String symptom) {
-    final value = severityValues[symptom] ?? 5;
-    final color = _severityColor(value);
-    final label = _severityLabel(value);
-
-    return _glassCard(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(symptom,
-              style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF30161A))),
-          const SizedBox(height: 14),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: color,
-              inactiveTrackColor: const Color(0xFFF0EBDB),
-              thumbColor: color,
-              overlayColor: color.withOpacity(0.18),
-              trackHeight: 6,
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0EBDB),
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: Slider(
-              value: value,
-              min: 0,
-              max: 10,
-              divisions: 10,
-              label: label,
-              onChanged: (newValue) {
-                setState(() {
-                  severityValues[symptom] = newValue;
-                });
+            child: IconButton(
+              tooltip: 'Home',
+              icon: const Icon(
+                Icons.home_rounded,
+                color: Color(0xFF30161A),
+                size: 28,
+              ),
+              onPressed: () {
+                Navigator.popUntil(context, (route) => route.isFirst);
               },
             ),
           ),
-          Text(
-            '${t("Selected severity", "Pika level")}: $label',
-            style: TextStyle(
-              color: color,
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _overallSeverityCard() {
-    final color = _severityColor(overallValue);
-
-    return _glassCard(
-      padding: const EdgeInsets.all(22),
-      child: Text(
-        '${t("Current overall pain severity", "Pika overall")}: $overallSeverity',
-        style: TextStyle(
-          color: color,
-          fontSize: 21,
-          fontWeight: FontWeight.w900,
         ),
-      ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = severityItems;
-
     return Scaffold(
       appBar: _appBar(context),
       body: AppBackground(
@@ -210,58 +273,38 @@ class _QuestionTwoPageState extends State<QuestionTwoPage> {
           padding: const EdgeInsets.all(22),
           child: Column(
             children: [
-              _pageTitle(),
-              const SizedBox(height: 24),
-              if (items.isEmpty)
-                _glassCard(
-                  child: Text(
-                    t(
-                      'No pain area selected. A default moderate severity will be used.',
-                      'Pika area wiya. Moderate level use palyani.',
-                    ),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF30161A),
-                    ),
-                  ),
+              HeadingWithMic(
+                text: t('How bad is the pain?', 'Pika level yaaltji?'),
+                speakText: t(
+                  'How bad is the pain? Select a number from 1 to 10.',
+                  'Pika level yaaltji? Number 1 munu 10 ngurkantja.',
                 ),
-              for (final symptom in items) ...[
-                _symptomSeverityCard(symptom),
-                const SizedBox(height: 18),
-              ],
-              _overallSeverityCard(),
-              const SizedBox(height: 30),
+                isEnglish: widget.isEnglish,
+              ),
+              const SizedBox(height: 34),
+
+              _severityScaleCard(),
+
+              const SizedBox(height: 34),
+
               CustomButton(
                 text: t('Next', 'Ankula'),
                 icon: Icons.arrow_forward_rounded,
-                gradientColors: const [
-                  Color(0xFF30161A),
-                  Color(0xFF5A2A2F),
-                ],
                 onPressed: () {
-  final allAnswers = widget.symptoms;
-
-  final fullInputText = [
-    widget.inputText,
-    allAnswers.join(', '),
-  ].where((e) => e.trim().isNotEmpty).join(', ');
-
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => QuestionThreePage(
-        isEnglish: widget.isEnglish,
-        symptoms: allAnswers,
-        duration: widget.duration,
-        severity: overallSeverity,
-        inputText: fullInputText,
-        voiceMode: widget.voiceMode,
-      ),
-    ),
-  );
-},
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => QuestionThreePage(
+                        isEnglish: widget.isEnglish,
+                        symptoms: widget.symptoms,
+                        duration: widget.duration,
+                        severity: severity,
+                        inputText: widget.inputText,
+                        voiceMode: widget.voiceMode,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -269,5 +312,4 @@ class _QuestionTwoPageState extends State<QuestionTwoPage> {
       ),
     );
   }
-  
 }

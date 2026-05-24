@@ -72,9 +72,13 @@ class _VoiceInputPageState extends State<VoiceInputPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   HeadingWithMic(
-                    text: t('Voice Input', 'Wangka Tjarpanyi'),
-                    speakText: 'Voice Input. Tap the microphone and say your symptoms.',
-                  ),
+  text: t('Voice Input', 'Wangka Tjarpanyi'),
+  speakText: t(
+    'Voice Input. Tap the microphone and say your symptoms.',
+    'Wangka tjarpanyi. Microphone patjala nyuntu pika tjuta wangkara.',
+  ),
+  isEnglish: widget.isEnglish,
+),
                   const SizedBox(height: 24),
                   GestureDetector(
                     onTap: toggleRecord,

@@ -121,11 +121,13 @@ class ResultPage extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(22, 22, 22, 42),
             child: Column(
               children: [
-                HeadingWithMic(
-                  text: t('Results', 'Nyangatja'),
-                  speakText:
-                      'Results. Possible disease is $disease. Severity is $severity. Advice: ${finalAdvice.replaceAll('\n', '. ')}',
-                ),
+               HeadingWithMic(
+  text: t('Results', 'Nyangatja'),
+  speakText: isEnglish
+      ? 'Results. Possible disease is $disease. Severity is $severity. Advice: ${finalAdvice.replaceAll('\n', '. ')}'
+      : 'Nyangatja. Possible disease $disease. Pika level $severity. Advice: ${finalAdvice.replaceAll('\n', '. ')}',
+  isEnglish: isEnglish,
+),
                 const SizedBox(height: 24),
                 Container(
                   width: 780,

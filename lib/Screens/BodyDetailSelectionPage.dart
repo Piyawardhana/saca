@@ -148,11 +148,14 @@ class _BodyDetailSelectionPageState extends State<BodyDetailSelectionPage> {
             padding: const EdgeInsets.all(22),
             child: Column(
               children: [
-                HeadingWithMic(
-                  text: t('Select Detailed Pain Area', 'Pika detail ngurkantja'),
-                  speakText:
-                      'Select the detailed pain area. You can choose fingers, wrist, knee, ankle, foot, or toe pain.',
-                ),
+               HeadingWithMic(
+  text: t('Select Detailed Pain Area', 'Pika detail ngurkantja'),
+  speakText: t(
+    'Select the detailed pain area. You can choose fingers, wrist, knee, ankle, foot, or toe pain.',
+    'Pika detail ngurkantja. Finger, wrist, knee, ankle, foot, munu toe pika ngurkantjaku.',
+  ),
+  isEnglish: widget.isEnglish,
+),
                 const SizedBox(height: 22),
                 Container(
                   width: 760,

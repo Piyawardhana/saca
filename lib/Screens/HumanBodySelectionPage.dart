@@ -849,10 +849,13 @@ String _getSymptomImage(String symptom) {
           child: Column(
             children: [
               HeadingWithMic(
-                text: t('Select Pain Area', 'Pika ngurkantja'),
-                speakText:
-                    'Select the pain area. Tap the plus sign near the body part where you feel pain.',
-              ),
+  text: t('Select Pain Area', 'Pika ngurkantja'),
+  speakText: t(
+    'Select the pain area. Tap the plus sign near the body part where you feel pain.',
+    'Pika ngurkantja. Plus button patjala body part pika nyinanyangka.',
+  ),
+  isEnglish: widget.isEnglish,
+),
               const SizedBox(height: 12),
               Text(
                 showFront

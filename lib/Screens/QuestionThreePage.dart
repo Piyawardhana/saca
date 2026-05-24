@@ -261,11 +261,15 @@ class _QuestionThreePageState extends State<QuestionThreePage> {
   }
 
   Widget _pageTitle() {
-    return HeadingWithMic(
-      text: t('Questions', 'Kulintjaku tjuta'),
-      speakText: 'Questions. Are you taking any medications?',
-    );
-  }
+  return HeadingWithMic(
+    text: t('Questions', 'Kulintjaku tjuta'),
+    speakText: t(
+      'Questions. Are you taking any medications?',
+      'Kulintjaku tjuta. Nyuntu medicine taking?',
+    ),
+    isEnglish: widget.isEnglish,
+  );
+}
 
   BoxDecoration _cardDecoration() {
     return BoxDecoration(

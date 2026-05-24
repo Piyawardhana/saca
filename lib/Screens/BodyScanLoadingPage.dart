@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:saca_project/Components/AppBackground.dart';
 import 'package:saca_project/Components/HeadingWithMic.dart';
 import 'package:saca_project/Screens/ResultPage.dart';
-import 'package:saca_project/Services/PredictionService.dart';
+import 'package:saca_project/services/api_service.dart';
+import 'package:saca_project/services/translation_service.dart';
 
 class BodyScanLoadingPage extends StatefulWidget {
   final bool isEnglish;
@@ -33,6 +34,8 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
   late AnimationController _controller;
   late Animation<double> _scanAnimation;
 
+  String t(String en, String pit) => widget.isEnglish ? en : pit;
+
   @override
   void initState() {
     super.initState();
@@ -43,10 +46,7 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
     )..repeat(reverse: true);
 
     _scanAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeInOut,
-      ),
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
 
     _runPrediction();
@@ -54,30 +54,46 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
 
   Future<void> _runPrediction() async {
     try {
-      final result = await PredictionService.predict(
-        text: widget.inputText,
-        symptoms: widget.symptoms,
-        severity: widget.severity,
-        duration: widget.duration,
+      final fullText = [
+        widget.inputText,
+        widget.symptoms.join(', '),
+        'Duration: ${widget.duration}',
+        'Severity: ${widget.severity}',
+        'Medication taken: ${widget.takingMedication ? "Yes" : "No"}',
+      ].where((e) => e.trim().isNotEmpty).join(', ');
+
+      String apiInputText = fullText;
+
+      if (!widget.isEnglish) {
+        apiInputText = await TranslationService.toEnglish(fullText);
+      }
+
+      final result = await ApiService.predict(
+        text: apiInputText,
+        painScore: _severityToPainScore(widget.severity),
+        bodyPart: widget.symptoms.join(', '),
       );
 
-      final diseases = result['possible_diseases'] as List<dynamic>? ?? [];
+      String disease = result['predicted_disease']?.toString() ??
+          result['disease']?.toString() ??
+          result['possible_disease']?.toString() ??
+          'Unknown';
 
-      final disease =
-          diseases.isNotEmpty ? diseases.first['name'].toString() : 'Unknown';
-
-      final recommendation = result['recommendation']?.toString() ??
+      String recommendation = result['recommendation']?.toString() ??
+          result['advice']?.toString() ??
           'Please consult a doctor if symptoms continue.';
 
-      final backendSeverity = _mapSeverity(result['severity']?.toString());
+      String finalSeverity = result['severity']?.toString() ?? widget.severity;
 
-      final responseSymptoms = result['symptoms'];
-      final finalSymptoms = responseSymptoms is List
-          ? responseSymptoms.map((e) => e.toString()).toList()
-          : widget.symptoms;
+      if (!widget.isEnglish) {
+        disease = await TranslationService.toPitjantjatjara(disease);
+        recommendation =
+            await TranslationService.toPitjantjatjara(recommendation);
+        finalSeverity =
+            await TranslationService.toPitjantjatjara(finalSeverity);
+      }
 
       await Future.delayed(const Duration(seconds: 3));
-
       if (!mounted) return;
 
       Navigator.pushReplacement(
@@ -85,11 +101,11 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
         MaterialPageRoute(
           builder: (_) => ResultPage(
             isEnglish: widget.isEnglish,
-            symptoms: finalSymptoms,
+            symptoms: widget.symptoms,
             duration: widget.duration,
             takingMedication: widget.takingMedication,
-            severity: backendSeverity,
-            inputText: result['cleaned_text']?.toString() ?? widget.inputText,
+            severity: finalSeverity,
+            inputText: fullText,
             disease: disease,
             recommendation: recommendation,
             voiceMode: widget.voiceMode,
@@ -98,8 +114,17 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
       );
     } catch (e) {
       await Future.delayed(const Duration(seconds: 3));
-
       if (!mounted) return;
+
+      String disease = 'Prediction unavailable';
+      String recommendation =
+          'Backend connection failed. Please check the API server.';
+
+      if (!widget.isEnglish) {
+        disease = await TranslationService.toPitjantjatjara(disease);
+        recommendation =
+            await TranslationService.toPitjantjatjara(recommendation);
+      }
 
       Navigator.pushReplacement(
         context,
@@ -111,9 +136,8 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
             takingMedication: widget.takingMedication,
             severity: widget.severity,
             inputText: widget.inputText,
-            disease: 'Prediction unavailable',
-            recommendation:
-                'Backend connection failed. Please check the API server.',
+            disease: disease,
+            recommendation: recommendation,
             voiceMode: widget.voiceMode,
           ),
         ),
@@ -121,14 +145,14 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
     }
   }
 
-  String _mapSeverity(String? value) {
-    final v = value?.toLowerCase().trim() ?? '';
+  int _severityToPainScore(String severity) {
+    final s = severity.toLowerCase();
 
-    if (v == 'severe' || v == 'high') return 'High';
-    if (v == 'moderate') return 'Moderate';
-    if (v == 'low') return 'Low';
+    if (s.contains('high')) return 8;
+    if (s.contains('moderate')) return 5;
+    if (s.contains('low')) return 2;
 
-    return widget.severity;
+    return 5;
   }
 
   @override
@@ -145,10 +169,7 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
       automaticallyImplyLeading: false,
       title: const Row(
         children: [
-          Icon(
-            Icons.favorite_rounded,
-            color: Color(0xFF30161A),
-          ),
+          Icon(Icons.favorite_rounded, color: Color(0xFF30161A)),
           SizedBox(width: 10),
           Text(
             'SACA',
@@ -191,8 +212,11 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
                   text: widget.isEnglish
                       ? 'Scanning your symptoms'
                       : 'Pika tjuta nyanganyi',
-                  speakText:
-                      'Scanning your symptoms. Please wait while SACA prepares your result.',
+                  speakText: t(
+                    'Scanning your symptoms. Please wait while SACA prepares your result.',
+                    'Pika tjuta nyanganyi. SACA result palyantjaku paṯaṟa nyinama.',
+                  ),
+                  isEnglish: widget.isEnglish,
                   fontSize: 26,
                 ),
                 const SizedBox(height: 24),
@@ -223,14 +247,6 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
                                     Color(0xFF5A2A2F),
                                   ],
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF30161A)
-                                        .withOpacity(0.45),
-                                    blurRadius: 16,
-                                    spreadRadius: 3,
-                                  ),
-                                ],
                               ),
                             ),
                           );

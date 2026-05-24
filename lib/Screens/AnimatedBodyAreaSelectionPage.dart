@@ -235,11 +235,14 @@ class _AnimatedBodyAreaSelectionPageState
             padding: const EdgeInsets.all(22),
             child: Column(
               children: [
-                HeadingWithMic(
-                  text: t('Select Pain Area', 'Pika ngurkantja'),
-                  speakText:
-                      'Select the pain area. Tap the plus button on the body part where you feel pain.',
-                ),
+               HeadingWithMic(
+  text: t('Select Pain Area', 'Pika ngurkantja'),
+  speakText: t(
+    'Select the pain area. Tap the plus button on the body part where you feel pain.',
+    'Pika ngurkantja. Plus button patjala body part pika nyinanyangka.',
+  ),
+  isEnglish: widget.isEnglish,
+),
                 const SizedBox(height: 14),
                 Text(
                   showFront
