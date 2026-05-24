@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:saca_project/Components/AppBackground.dart';
 import 'package:saca_project/Components/CustomButton.dart';
 import 'package:saca_project/Screens/QuestionThreePage.dart';
+import 'package:saca_project/Screens/QuestionOnePage.dart';
 
 class TextInputPage extends StatefulWidget {
   final bool isEnglish;
@@ -16,7 +17,8 @@ class TextInputPage extends StatefulWidget {
 }
 
 class _TextInputPageState extends State<TextInputPage> {
-  final TextEditingController controller = TextEditingController();
+  TextEditingController symptomController =
+    TextEditingController();
 
   String t(String en, String pit) {
     return widget.isEnglish ? en : pit;
@@ -140,7 +142,7 @@ class _TextInputPageState extends State<TextInputPage> {
                     ),
                     const SizedBox(height: 24),
                     TextField(
-                      controller: controller,
+                      controller:symptomController,
                       maxLines: 7,
                       style: const TextStyle(
                         color: Color(0xFF30161A),
@@ -169,7 +171,7 @@ class _TextInputPageState extends State<TextInputPage> {
                       text: t('Next', 'Ankula'),
                       icon: Icons.arrow_forward_rounded,
                       onPressed: () {
-                        final text = controller.text.trim();
+                        final text = symptomController.text.trim();
 
                         final symptoms = text
                             .split(',')
@@ -178,18 +180,16 @@ class _TextInputPageState extends State<TextInputPage> {
                             .toList();
 
                         Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => QuestionThreePage(
-                              isEnglish: widget.isEnglish,
-                              symptoms: symptoms,
-                              duration: 'Not provided',
-                              severity: 'Moderate',
-                              inputText: text,
-                              voiceMode: false,
-                            ),
-                          ),
-                        );
+  context,
+  MaterialPageRoute(
+    builder: (_) => QuestionOnePage(
+      isEnglish: widget.isEnglish,
+      symptoms: [symptomController.text.trim()],
+      inputText: symptomController.text.trim(),
+      voiceMode: false,
+    ),
+  ),
+);
                       },
                     ),
                   ],

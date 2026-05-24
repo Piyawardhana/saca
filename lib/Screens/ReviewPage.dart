@@ -171,7 +171,7 @@ class ReviewPage extends StatelessWidget {
 
               infoBox(t('Duration', 'Nyinanytja'), duration),
 
-              infoBox(t('Severity', 'Pika level'), severity),
+              infoBox(t('Pain Score', 'Pika score'), severity),
 
               infoBox(
                 t('Medication taken', 'Medicine'),

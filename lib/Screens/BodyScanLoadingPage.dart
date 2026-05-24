@@ -36,6 +36,28 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
 
   String t(String en, String pit) => widget.isEnglish ? en : pit;
 
+  bool isLifestyleItem(String value) {
+    final s = value.toLowerCase().trim();
+
+    return s.contains('no major change') ||
+        s.contains('new food') ||
+        s.contains('food poisoning') ||
+        s.contains('less sleep') ||
+        s.contains('high stress') ||
+        s.contains('heavy physical work') ||
+        s.contains('travel recently') ||
+        s.contains('alcohol') ||
+        s.contains('smoking');
+  }
+
+  List<String> get medicalSymptoms {
+    return widget.symptoms.where((item) => !isLifestyleItem(item)).toList();
+  }
+
+  List<String> get lifestyleAnswers {
+    return widget.symptoms.where((item) => isLifestyleItem(item)).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -54,9 +76,11 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
 
   Future<void> _runPrediction() async {
     try {
+      final cleanSymptoms = medicalSymptoms.toSet().toList();
+      final cleanLifestyle = lifestyleAnswers.toSet().toList();
+
       final fullText = [
-        widget.inputText,
-        widget.symptoms.join(', '),
+        cleanSymptoms.join(', '),
         'Duration: ${widget.duration}',
         'Severity: ${widget.severity}',
         'Medication taken: ${widget.takingMedication ? "Yes" : "No"}',
@@ -68,22 +92,46 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
         apiInputText = await TranslationService.toEnglish(fullText);
       }
 
+      debugPrint('========== API INPUT ==========');
+      debugPrint('Full text before translation: $fullText');
+      debugPrint('Text sent to API: $apiInputText');
+      debugPrint('Pain score: ${_severityToPainScore(widget.severity)}');
+      debugPrint('Body parts/symptoms: ${cleanSymptoms.join(', ')}');
+      debugPrint('Lifestyle answers: ${cleanLifestyle.join(', ')}');
+      debugPrint('===============================');
+
       final result = await ApiService.predict(
         text: apiInputText,
         painScore: _severityToPainScore(widget.severity),
-        bodyPart: widget.symptoms.join(', '),
+        bodyPart: cleanSymptoms.join(', '),
       );
 
-      String disease = result['predicted_disease']?.toString() ??
-          result['disease']?.toString() ??
-          result['possible_disease']?.toString() ??
-          'Unknown';
+      String disease = 'Unknown';
+
+      if (result['possible_diseases'] != null &&
+          result['possible_diseases'] is List &&
+          result['possible_diseases'].isNotEmpty) {
+        disease =
+            result['possible_diseases'][0]['name']?.toString() ?? 'Unknown';
+      } else {
+        disease = result['predicted_disease']?.toString() ??
+            result['disease']?.toString() ??
+            result['possible_disease']?.toString() ??
+            'Unknown';
+      }
 
       String recommendation = result['recommendation']?.toString() ??
           result['advice']?.toString() ??
           'Please consult a doctor if symptoms continue.';
 
       String finalSeverity = result['severity']?.toString() ?? widget.severity;
+
+      debugPrint('========== API OUTPUT ==========');
+      debugPrint(result.toString());
+      debugPrint('Disease: $disease');
+      debugPrint('Recommendation: $recommendation');
+      debugPrint('Severity: $finalSeverity');
+      debugPrint('================================');
 
       if (!widget.isEnglish) {
         disease = await TranslationService.toPitjantjatjara(disease);
@@ -101,7 +149,7 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
         MaterialPageRoute(
           builder: (_) => ResultPage(
             isEnglish: widget.isEnglish,
-            symptoms: widget.symptoms,
+            symptoms: cleanSymptoms,
             duration: widget.duration,
             takingMedication: widget.takingMedication,
             severity: finalSeverity,
@@ -113,6 +161,10 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
         ),
       );
     } catch (e) {
+      debugPrint('========== API ERROR ==========');
+      debugPrint(e.toString());
+      debugPrint('==============================');
+
       await Future.delayed(const Duration(seconds: 3));
       if (!mounted) return;
 
@@ -131,7 +183,7 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
         MaterialPageRoute(
           builder: (_) => ResultPage(
             isEnglish: widget.isEnglish,
-            symptoms: widget.symptoms,
+            symptoms: medicalSymptoms.toSet().toList(),
             duration: widget.duration,
             takingMedication: widget.takingMedication,
             severity: widget.severity,
@@ -150,7 +202,7 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
 
     if (s.contains('high')) return 8;
     if (s.contains('moderate')) return 5;
-    if (s.contains('low')) return 2;
+    if (s.contains('low') || s.contains('mild')) return 2;
 
     return 5;
   }

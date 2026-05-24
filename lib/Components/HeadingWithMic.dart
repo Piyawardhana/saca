@@ -16,18 +16,18 @@ class HeadingWithMic extends StatelessWidget {
   });
 
   Future<void> _speak() async {
-    final FlutterTts flutterTts = FlutterTts();
+  final FlutterTts flutterTts = FlutterTts();
 
-    await flutterTts.setLanguage(
-      isEnglish ? 'en-AU' : 'en-AU',
-    );
+  await flutterTts.setLanguage(
+    isEnglish ? 'en-AU' : 'en-AU',
+  );
 
-    await flutterTts.setSpeechRate(0.5);
+  await flutterTts.setSpeechRate(0.9);
 
-    await flutterTts.setPitch(1.0);
+  await flutterTts.setPitch(1.0);
 
-    await flutterTts.speak(speakText);
-  }
+  await flutterTts.speak(speakText);
+}
 
   @override
   Widget build(BuildContext context) {
