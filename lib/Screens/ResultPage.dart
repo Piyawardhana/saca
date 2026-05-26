@@ -31,11 +31,23 @@ class ResultPage extends StatelessWidget {
 
   String t(String en, String pit) => isEnglish ? en : pit;
 
-  Color get severityColor {
-    if (severity == 'High') return Colors.red;
-    if (severity == 'Moderate') return Colors.orange;
+ Color get severityColor {
+  final s = severity.toLowerCase();
+
+  if (s.contains('severe') || s.contains('high')) {
+    return Colors.red;
+  }
+
+  if (s.contains('moderate')) {
+    return Colors.orange;
+  }
+
+  if (s.contains('mild') || s.contains('low')) {
     return Colors.green;
   }
+
+  return Colors.grey;
+}
 
   String get fallbackAdvice {
     if (severity == 'Low') {

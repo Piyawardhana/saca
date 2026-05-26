@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:saca_project/Components/AppBackground.dart';
 import 'package:saca_project/Components/CustomButton.dart';
 import 'package:saca_project/Components/HeadingWithMic.dart';
@@ -25,40 +26,18 @@ class QuestionTwoPage extends StatefulWidget {
 }
 
 class _QuestionTwoPageState extends State<QuestionTwoPage> {
+  final stt.SpeechToText speech = stt.SpeechToText();
+  final TextEditingController voiceTextController = TextEditingController();
+
+  bool isListening = false;
   int selectedPainScore = 5;
 
   String t(String en, String pit) => widget.isEnglish ? en : pit;
-
-  bool shouldUseForSeverity(String item) {
-    final s = item.toLowerCase().trim();
-
-    final blockedItems = [
-      'new food',
-      'food poisoning suspected',
-      'less sleep',
-      'high stress',
-      'heavy physical work',
-      'travel recently',
-      'alcohol or smoking',
-      'no major change',
-    ];
-
-    return !blockedItems.contains(s);
-  }
-
-  List<String> get painItems =>
-      widget.symptoms.where(shouldUseForSeverity).toList();
 
   String get severity {
     if (selectedPainScore <= 3) return 'Low';
     if (selectedPainScore <= 6) return 'Moderate';
     return 'High';
-  }
-
-  String get severityText {
-    if (selectedPainScore <= 3) return t('Low', 'Low');
-    if (selectedPainScore <= 6) return t('Moderate', 'Moderate');
-    return t('High', 'High');
   }
 
   Color get severityColor {
@@ -67,7 +46,58 @@ class _QuestionTwoPageState extends State<QuestionTwoPage> {
     return Colors.red;
   }
 
-  Widget _painScoreButton(int score) {
+  Future<void> recordPainScore() async {
+    final available = await speech.initialize();
+    if (!available) return;
+
+    setState(() {
+      isListening = true;
+    });
+
+    speech.listen(
+      localeId: 'en_US',
+      onResult: (result) {
+        final words = result.recognizedWords.toLowerCase();
+
+        setState(() {
+          voiceTextController.text = result.recognizedWords;
+
+          if (words.contains('ten') || words.contains('10')) {
+            selectedPainScore = 10;
+          } else if (words.contains('nine') || words.contains('9')) {
+            selectedPainScore = 9;
+          } else if (words.contains('eight') || words.contains('8')) {
+            selectedPainScore = 8;
+          } else if (words.contains('seven') || words.contains('7')) {
+            selectedPainScore = 7;
+          } else if (words.contains('six') || words.contains('6')) {
+            selectedPainScore = 6;
+          } else if (words.contains('five') || words.contains('5')) {
+            selectedPainScore = 5;
+          } else if (words.contains('four') || words.contains('4')) {
+            selectedPainScore = 4;
+          } else if (words.contains('three') || words.contains('3')) {
+            selectedPainScore = 3;
+          } else if (words.contains('two') || words.contains('2')) {
+            selectedPainScore = 2;
+          } else if (words.contains('one') || words.contains('1')) {
+            selectedPainScore = 1;
+          }
+        });
+      },
+    );
+
+    await Future.delayed(const Duration(seconds: 4));
+    await speech.stop();
+
+    if (!mounted) return;
+
+    setState(() {
+      isListening = false;
+    });
+  }
+
+  Widget painScoreButton(int score) {
     final selected = selectedPainScore == score;
 
     return GestureDetector(
@@ -106,7 +136,78 @@ class _QuestionTwoPageState extends State<QuestionTwoPage> {
     );
   }
 
-  Widget _severityScaleCard() {
+  Widget voiceRecordSection() {
+    if (!widget.voiceMode) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        const SizedBox(height: 26),
+        GestureDetector(
+          onTap: recordPainScore,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            width: isListening ? 92 : 76,
+            height: isListening ? 92 : 76,
+            decoration: BoxDecoration(
+              color: isListening ? Colors.red : const Color(0xFF30161A),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.25),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Icon(
+              isListening ? Icons.stop_rounded : Icons.mic_rounded,
+              color: Colors.white,
+              size: 40,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          isListening
+              ? t('Listening...', 'Kulini...')
+              : t('Tap mic and say pain score', 'Mic patjala pain score wangkara'),
+          style: const TextStyle(
+            color: Color(0xFF30161A),
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          width: 450,
+          child: TextField(
+            controller: voiceTextController,
+            readOnly: true,
+            maxLines: 2,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.92),
+              hintText: t(
+                'Recorded speech will appear here',
+                'Recorded wangka nyanganyi',
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            style: const TextStyle(
+              color: Color(0xFF30161A),
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget severityScaleCard() {
     return Container(
       width: 760,
       padding: const EdgeInsets.all(28),
@@ -129,11 +230,10 @@ class _QuestionTwoPageState extends State<QuestionTwoPage> {
             alignment: WrapAlignment.center,
             children: List.generate(
               10,
-              (index) => _painScoreButton(index + 1),
+              (index) => painScoreButton(index + 1),
             ),
           ),
           const SizedBox(height: 24),
-
           Container(
             width: 520,
             height: 20,
@@ -149,68 +249,47 @@ class _QuestionTwoPageState extends State<QuestionTwoPage> {
               ),
             ),
           ),
-
           const SizedBox(height: 18),
-
           const SizedBox(
             width: 560,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Low',
-                  style: TextStyle(
-                    color: Color(0xFF30161A),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  'Moderate',
-                  style: TextStyle(
-                    color: Color(0xFF30161A),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  'High',
-                  style: TextStyle(
-                    color: Color(0xFF30161A),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                Text('Mild', style: TextStyle(fontWeight: FontWeight.w900)),
+                Text('Moderate', style: TextStyle(fontWeight: FontWeight.w900)),
+                Text('Severe', style: TextStyle(fontWeight: FontWeight.w900)),
               ],
             ),
           ),
-
           const SizedBox(height: 22),
-
           Text(
-            '${t('Selected severity', 'Pika level')}: $severityText',
+            '${t('Pain Score', 'Pika score')}: $selectedPainScore',
             style: TextStyle(
               color: severityColor,
-              fontSize: 22,
+              fontSize: 24,
               fontWeight: FontWeight.w900,
             ),
           ),
-
-          if (painItems.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            Text(
-              '${t('For', 'For')}: ${painItems.join(', ')}',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF30161A),
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
+          const SizedBox(height: 8),
+          Text(
+            '${t('Severity', 'Pika')}: $severity',
+            style: TextStyle(
+              color: severityColor,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
             ),
-          ],
+          ),
+          voiceRecordSection(),
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    voiceTextController.dispose();
+    speech.stop();
+    super.dispose();
   }
 
   PreferredSizeWidget _appBar(BuildContext context) {
@@ -276,17 +355,14 @@ class _QuestionTwoPageState extends State<QuestionTwoPage> {
               HeadingWithMic(
                 text: t('How bad is the pain?', 'Pika level yaaltji?'),
                 speakText: t(
-                  'How bad is the pain? Select a number from 1 to 10.',
+                  'How bad is the pain? Select or say a number from one to ten.',
                   'Pika level yaaltji? Number 1 munu 10 ngurkantja.',
                 ),
                 isEnglish: widget.isEnglish,
               ),
               const SizedBox(height: 34),
-
-              _severityScaleCard(),
-
+              severityScaleCard(),
               const SizedBox(height: 34),
-
               CustomButton(
                 text: t('Next', 'Ankula'),
                 icon: Icons.arrow_forward_rounded,
@@ -298,7 +374,7 @@ class _QuestionTwoPageState extends State<QuestionTwoPage> {
                         isEnglish: widget.isEnglish,
                         symptoms: widget.symptoms,
                         duration: widget.duration,
-                        severity: severity,
+                        severity: selectedPainScore.toString(),
                         inputText: widget.inputText,
                         voiceMode: widget.voiceMode,
                       ),
