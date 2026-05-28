@@ -79,10 +79,22 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
       final cleanSymptoms = medicalSymptoms.toSet().toList();
       final cleanLifestyle = lifestyleAnswers.toSet().toList();
 
+String severityLabel;
+
+final painScore =
+    int.tryParse(widget.severity) ?? 1;
+
+if (painScore >= 7) {
+  severityLabel = 'severe';
+} else if (painScore >= 4) {
+  severityLabel = 'moderate';
+} else {
+  severityLabel = 'mild';
+}
       final fullText = [
         cleanSymptoms.join(', '),
         'Duration: ${widget.duration}',
-        'Severity: ${widget.severity}',
+        'Severity: $severityLabel',
         'Medication taken: ${widget.takingMedication ? "Yes" : "No"}',
       ].where((e) => e.trim().isNotEmpty).join(', ');
 
@@ -157,6 +169,7 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
             disease: disease,
             recommendation: recommendation,
             voiceMode: widget.voiceMode,
+            lifestyleChanges: cleanLifestyle,
           ),
         ),
       );
@@ -191,6 +204,7 @@ class _BodyScanLoadingPageState extends State<BodyScanLoadingPage>
             disease: disease,
             recommendation: recommendation,
             voiceMode: widget.voiceMode,
+             lifestyleChanges: lifestyleAnswers.toSet().toList(),
           ),
         ),
       );

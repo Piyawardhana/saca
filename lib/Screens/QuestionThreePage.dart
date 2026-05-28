@@ -216,7 +216,7 @@ class _QuestionThreePageState extends State<QuestionThreePage> {
           const SizedBox(width: 14),
           Expanded(
             child: Text(
-              '${t("Current overall severity", "Pika overall")}: ${widget.severity}',
+              '${t("Current Pain Score", "Pika overall")}: ${widget.severity}',
               style: TextStyle(
                 color: severityColor,
                 fontSize: 20,

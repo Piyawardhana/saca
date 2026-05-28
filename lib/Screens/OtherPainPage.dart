@@ -265,9 +265,9 @@ class _OtherPainPageState extends State<OtherPainPage> {
 
   void goNext() {
     final updatedSymptoms = [
-      ...widget.symptoms,
-      ...selectedChanges,
-    ];
+  ...widget.symptoms,
+  ...selectedChanges,
+].toSet().toList();
 
     final updatedInputText = [
       widget.inputText,

@@ -242,7 +242,6 @@ class _QuestionTwoPageState extends State<QuestionTwoPage> {
               gradient: const LinearGradient(
                 colors: [
                   Colors.green,
-                  Colors.yellow,
                   Colors.orange,
                   Colors.red,
                 ],
